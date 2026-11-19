@@ -196,6 +196,9 @@ public sealed class LyricView : FrameworkElement
         }
     }
 
+    /// <summary>Space kept between the text and each side: the hover frame's padding at the sung line's size, plus room for blur.</summary>
+    public static double EdgeFor(LyricStyle style) => Math.Ceiling(style.FontSize * .55 * style.ActiveScale) + 4;
+
     private void LayoutRows(double width = double.NaN)
     {
         if (double.IsNaN(width)) width = ActualWidth;
@@ -385,18 +388,21 @@ internal sealed class LyricRow : FrameworkElement
         _fontSize = IsCredit ? Math.Round(style.FontSize * .72) : style.FontSize;
         _gap = IsCredit ? gap * .55 : gap;
         _alignFactor = style.Align switch { 0 => 0, 2 => 1, _ => .5 };
+        // Text keeps clear of the view's edges so the hover frame and blur are not clipped.
+        var edge = LyricView.EdgeFor(style);
+        var inner = Math.Max(60, width - edge * 2);
         // Lines wrap at a width that still fits once the sung line is enlarged.
-        _box = Math.Max(60, width / style.ActiveScale - 8);
+        _box = Math.Max(60, inner / style.ActiveScale - 8);
         // Centred lyrics sit a little left of the column's middle, which reads as centred beside the cover.
-        var shift = style.Align == 1 ? -Math.Round(Math.Min(24, width * .04)) : 0;
-        _offsetX = (width - _box) * _alignFactor + shift;
+        var shift = style.Align == 1 ? -Math.Round(Math.Min(24, inner * .04)) : 0;
+        _offsetX = edge + (inner - _box) * _alignFactor + shift;
         if (!IsBreak)
         {
             _normal = Make(FontWeights.Normal);
             _bold = Make(FontWeights.SemiBold);
             _textHeight = Math.Max(_normal.Height, _bold.Height);
         }
-        _scale.CenterX = width * _alignFactor + shift;
+        _scale.CenterX = edge + inner * _alignFactor + shift;
         _scale.CenterY = _gap / 2;
         InvalidateVisual();
 

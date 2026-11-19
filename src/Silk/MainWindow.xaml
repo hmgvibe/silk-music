@@ -302,7 +302,7 @@
                 <ui:WaveformView x:Name="PlayerWave" Grid.Column="1" Bars="{Binding WaveBars}" Plain="{Binding WavePlain}" HasTrack="{Binding HasTrack}" Heights="{Binding WaveHeights}" Progress="{Binding Progress}" AutomationProperties.Name="播放進度" />
             </Grid>
 
-            <StackPanel x:Name="PlayerLeft" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40,40,0,0">
+            <StackPanel x:Name="PlayerLeft" SizeChanged="OnPlayerLeftSizeChanged" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40,40,0,0">
                 <Border x:Name="PlayerCover" Width="340" Height="340" CornerRadius="38" ui:Cover.Keep="True" ui:Cover.Url="{Binding CurrentCover}" />
                 <TextBlock Text="{Binding CurrentTitle}" FontSize="20" FontWeight="SemiBold" Margin="0,20,0,0" TextAlignment="Center" TextTrimming="CharacterEllipsis"
                            Width="{Binding ActualWidth, ElementName=PlayerCover}" />

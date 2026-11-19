@@ -235,6 +235,30 @@ public partial class MainWindow : Window
     private void OnPlayerSizeChanged(object sender, SizeChangedEventArgs e)
     {
         UpdatePlayerCover();
+        UpdateLyricMargin();
+    }
+
+    private void OnPlayerLeftSizeChanged(object sender, SizeChangedEventArgs e) => UpdateLyricMargin();
+
+    /// <summary>
+    /// The lyric view reaches past the text by its edge allowance on both sides, so the text itself lands on the margins.
+    /// Right-aligned lyrics end as far from the window's right edge as the cover starts from its left edge.
+    /// </summary>
+    private void UpdateLyricMargin()
+    {
+        var style = _model.LyricStyle;
+        var edge = LyricView.EdgeFor(style);
+        var right = 64.0;
+        if (style.Align == 2 && PlayerLeft.ActualWidth > 0)
+        {
+            // Worked out from layout rather than TranslatePoint, which would include the cover's fly-in transforms.
+            var slot = LayoutInformation.GetLayoutSlot(PlayerLeft);
+            var margin = PlayerLeft.Margin;
+            var stackLeft = slot.X + margin.Left + (slot.Width - margin.Left - margin.Right - PlayerLeft.ActualWidth) / 2;
+            right = Math.Round(stackLeft + (PlayerLeft.ActualWidth - PlayerCover.ActualWidth) / 2);
+        }
+        var next = new Thickness(10 - edge, 62, right - edge, 6);
+        if (LyricArea.Margin != next) LyricArea.Margin = next;
     }
 
     private void UpdatePlayerCover()
@@ -248,6 +272,7 @@ public partial class MainWindow : Window
 
     private void LayoutLyrics()
     {
+        UpdateLyricMargin();
         var line = _model.LyricLineHeight;
         var height = Math.Min(LyricArea.ActualHeight, _model.LyricLines * line);
         LyricViewport.Height = Math.Max(line, height);

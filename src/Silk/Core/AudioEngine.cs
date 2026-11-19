@@ -255,7 +255,7 @@ public sealed class AudioEngine : IDisposable
         {
             if (!Active)
             {
-                Array.Clear(target, offset, count);
+                Silence(target, offset, count);
                 return count;
             }
 
@@ -269,9 +269,16 @@ public sealed class AudioEngine : IDisposable
                 target[i] *= _gain;
                 target[i + 1] *= _gain;
             }
-            if (muted) Array.Clear(target, offset, count);
+            if (muted) Silence(target, offset, count);
             if (available == 0) drained();
             return count;
+        }
+
+        // NAudio passes a byte[] viewed as float[] here, so Array.Clear would clear bytes and leave
+        // three quarters of the buffer holding old audio, which the device then replays as noise.
+        private static void Silence(float[] target, int offset, int count)
+        {
+            for (var i = offset; i < offset + count; i++) target[i] = 0;
         }
     }
 }
