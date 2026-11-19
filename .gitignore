@@ -1,0 +1,15 @@
+# Build output
+bin/
+obj/
+dist/
+*.user
+.vs/
+
+# Installed packages (restore with npm install in bridge/)
+node_modules/
+
+# Screenshots from visual checks; some may show real covers or lyrics
+.oil-ui/windows-player/shots/
+
+# Logs and local data
+*.log
