@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- The bundled music service listens on the loopback address over plain HTTP,
+         and some QQ Music stream and image links are plain HTTP too. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="true">qq.com</domain>
+        <domain includeSubdomains="true">gtimg.cn</domain>
+        <domain includeSubdomains="true">qpic.cn</domain>
+    </domain-config>
+</network-security-config>

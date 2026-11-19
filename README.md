@@ -35,8 +35,38 @@ dotnet run -- --demo
 
 登入資料以 Windows DPAPI 加密，存放在 `%LOCALAPPDATA%\Silk`，不會寫進項目資料夾。
 
+## 安卓版
+
+`android` 是用 Kotlin 與 Jetpack Compose 寫的安卓版，介面照手繪草圖：首頁一張卡片放「猜你喜歡」、「每日 30 首」、推薦與歌單，底部是懸浮的迷你播放條；播放器分兩頁，左右滑動切換封面頁與歌詞頁。播放用 Media3，可在背景播放，並支援通知欄與耳機按鍵。
+
+手機上沒有 Node.js，所以 App 內建 [nodejs-mobile](https://github.com/nodejs-mobile/nodejs-mobile)（Node 18），直接在手機上執行和桌面版相同的 `bridge`。`bridge/mobile.cjs` 補上 Node 18 缺少的幾個全域功能。
+
+建置需要：
+
+- JDK 17 或 21、Android SDK（compileSdk 35）、NDK 27.2 與 CMake 3.22.1
+- 解壓好的 nodejs-mobile Android 版本，路徑寫在 `android/local.properties`：
+
+```properties
+sdk.dir=D\:/DevTools/Android/Sdk
+nodejs.mobile.dir=D\:/DevTools/nodejs-mobile
+```
+
+- 先在 `bridge` 執行過 `npm install`（建置時會把 `bridge` 連同 `node_modules` 打包進 App）
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+不登入也能看介面：用示範模式啟動。
+
+```bash
+adb shell am start -n app.silk/.ui.MainActivity --ez demo true
+```
+
 ## 項目結構
 
 - `src/Silk`：WPF 應用程式
+- `android`：安卓版
 - `bridge`：本機音樂服務（Node.js）
 - `assets/icon`：圖標與產生圖標的腳本

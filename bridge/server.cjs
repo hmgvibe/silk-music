@@ -39,10 +39,14 @@ http.createServer = function guardedCreateServer(...args) {
   });
 };
 
+// The desktop app reads a random port from stdout; the Android app picks the port and passes it in.
+const port = Number.parseInt(process.env.SILK_PORT || '0', 10) || 0;
+const mobile = process.env.SILK_MOBILE === '1';
+
 const listen = http.Server.prototype.listen;
 http.Server.prototype.listen = function loopbackListen(...args) {
   const callback = args.find((value) => typeof value === 'function');
-  return listen.call(this, 0, '127.0.0.1', callback);
+  return listen.call(this, port, '127.0.0.1', callback);
 };
 
 const { server } = require('@yakult-green-tea/qq-music-api');
@@ -52,10 +56,13 @@ server.once('listening', () => {
 });
 server.once('error', (error) => {
   process.stderr.write(`bridge failed: ${error.code || 'unknown'}\n`);
-  process.exit(1);
+  // On Android, Node shares the app's process, so exiting would close the app.
+  if (!mobile) process.exit(1);
 });
 
-// The desktop app holds stdin open; when it exits for any reason the bridge goes with it.
-process.stdin.resume();
-process.stdin.once('end', () => process.exit(0));
-process.stdin.once('close', () => process.exit(0));
+if (!mobile) {
+  // The desktop app holds stdin open; when it exits for any reason the bridge goes with it.
+  process.stdin.resume();
+  process.stdin.once('end', () => process.exit(0));
+  process.stdin.once('close', () => process.exit(0));
+}
