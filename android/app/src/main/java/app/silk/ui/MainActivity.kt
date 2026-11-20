@@ -2,6 +2,7 @@ package app.silk.ui
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -41,6 +42,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.silk.SilkApp
@@ -78,14 +83,15 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun SilkRoot(vm: AppViewModel) {
-    SilkTheme(vm.palette) {
+    SilkTheme(vm.themePalette, solidPanel = vm.panelMode == 1) {
         val silk = LocalSilk.current
         var queueOpen by remember { mutableStateOf(false) }
         var accountOpen by remember { mutableStateOf(false) }
         BackHandler(enabled = vm.playerOpen || vm.screens.size > 1) { vm.back() }
+        PlayerOrientation(vm)
 
         Box(Modifier.fillMaxSize().background(silk.a)) {
-            SilkBackground(moving = vm.isPlaying)
+            SilkBackground(moving = vm.isPlaying, glow = glowFor(vm.glow))
 
             if (!vm.ready) {
                 Starting(vm)
@@ -109,6 +115,7 @@ private fun SilkRoot(vm: AppViewModel) {
                             Screen.Search -> SearchScreen(vm)
                             Screen.Library -> LibraryScreen(vm)
                             Screen.Login -> LoginScreen(vm)
+                            Screen.Settings -> SettingsScreen(vm)
                             is Screen.Songs -> SongsScreen(vm, screen.collection)
                         }
                     }
@@ -122,7 +129,7 @@ private fun SilkRoot(vm: AppViewModel) {
                 exit = slideOutVertically(tween(320)) { it } + fadeOut(tween(260)),
             ) {
                 Box(Modifier.fillMaxSize()) {
-                    SilkBackground(moving = vm.isPlaying)
+                    SilkBackground(moving = vm.isPlaying, glow = glowFor(vm.glow))
                     PlayerScreen(vm, onClose = { vm.playerOpen = false })
                 }
             }
@@ -132,6 +139,36 @@ private fun SilkRoot(vm: AppViewModel) {
 
         if (queueOpen) QueueSheet(vm) { queueOpen = false }
         if (accountOpen) AccountSheet(vm) { accountOpen = false }
+    }
+}
+
+/**
+ * The app stays upright; only the player turns sideways, when asked. Sideways, the system bars hide
+ * (a swipe from the edge brings them back) so the lyrics get the whole height.
+ */
+@Composable
+private fun PlayerOrientation(vm: AppViewModel) {
+    val activity = LocalContext.current as? ComponentActivity ?: return
+    val sideways = vm.playerOpen && vm.landscape
+    // Dark status bar icons over light colours (a light cover or the fixed light theme).
+    val light = vm.themePalette.light
+    LaunchedEffect(light) {
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
+        }
+    }
+    LaunchedEffect(vm.playerOpen) { if (!vm.playerOpen) vm.landscape = false }
+    LaunchedEffect(sideways) {
+        activity.requestedOrientation =
+            if (sideways) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        if (sideways) {
+            bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            bars.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 }
 

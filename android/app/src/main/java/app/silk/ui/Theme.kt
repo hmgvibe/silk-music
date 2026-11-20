@@ -20,6 +20,9 @@ data class CoverPalette(val a: Color, val b: Color, val c: Color, val light: Boo
     companion object {
         val Default = CoverPalette(hsl(208f, .62f, .15f), hsl(190f, .62f, .28f), hsl(178f, .5f, .68f), false)
 
+        /** The Windows app's fixed light colours. */
+        val LightDefault = CoverPalette(hsl(38f, .22f, .87f), hsl(170f, .12f, .8f), hsl(40f, .3f, .97f), true)
+
         /** The same rules as the Windows app, so both pick the same colours for a cover. */
         fun from(bitmap: Bitmap): CoverPalette {
             val small = Bitmap.createScaledBitmap(bitmap, 32, 32, true)
@@ -89,6 +92,8 @@ data class SilkColors(
     val c: Color,
     val fg: Color,
     val light: Boolean,
+    /** The Windows app's "solid" panel texture: panels nearly opaque instead of see-through. */
+    val solidPanel: Boolean = false,
 ) {
     val fg70 get() = fg.copy(alpha = .7f)
     val fg45 get() = fg.copy(alpha = .45f)
@@ -97,7 +102,8 @@ data class SilkColors(
     val fg07 get() = fg.copy(alpha = .07f)
 
     /** The frosted panel behind the home page's content. */
-    val panel get() = if (light) Color.White.copy(alpha = .38f) else lerp(a, Color.Black, .25f).copy(alpha = .42f)
+    val panel get() = if (light) Color.White.copy(alpha = if (solidPanel) .82f else .38f)
+        else lerp(a, Color.Black, .25f).copy(alpha = if (solidPanel) .88f else .42f)
 
     /** Sheets and menus: solid enough to read over moving silk. */
     val sheet get() = if (light) lerp(c, Color.White, .4f) else lerp(a, Color.Black, .35f)
@@ -108,11 +114,11 @@ val LocalSilk = staticCompositionLocalOf { SilkColors(CoverPalette.Default.a, Co
 private val Ink = Color(38, 31, 26)
 
 @Composable
-fun SilkTheme(palette: CoverPalette, content: @Composable () -> Unit) {
+fun SilkTheme(palette: CoverPalette, solidPanel: Boolean = false, content: @Composable () -> Unit) {
     val spec = tween<Color>(900)
     val a by animateColorAsState(palette.a, spec, label = "a")
     val b by animateColorAsState(palette.b, spec, label = "b")
     val c by animateColorAsState(palette.c, spec, label = "c")
     val fg by animateColorAsState(if (palette.light) Ink else Color.White, spec, label = "fg")
-    CompositionLocalProvider(LocalSilk provides SilkColors(a, b, c, fg, palette.light), content = content)
+    CompositionLocalProvider(LocalSilk provides SilkColors(a, b, c, fg, palette.light, solidPanel), content = content)
 }

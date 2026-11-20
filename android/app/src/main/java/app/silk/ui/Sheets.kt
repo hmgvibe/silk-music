@@ -88,7 +88,7 @@ private fun QueueAction(icon: androidx.compose.ui.graphics.vector.ImageVector, l
     }
 }
 
-/** Account: the signed-in name, stream quality and sign-out. */
+/** Account: the signed-in name and sign-out. Quality lives in the settings page, as on Windows. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountSheet(vm: AppViewModel, onDismiss: () -> Unit) {
@@ -97,16 +97,6 @@ fun AccountSheet(vm: AppViewModel, onDismiss: () -> Unit) {
         Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 36.dp)) {
             Text(vm.profile?.name ?: "QQ 音樂", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = silk.fg)
             Spacer(Modifier.height(20.dp))
-            Text("音質", color = silk.fg, fontSize = 15.sp)
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf("best" to "最佳", "320" to "320k", "128" to "128k").forEach { (value, label) ->
-                    Chip(label, vm.quality == value) { vm.setStreamQuality(value) }
-                }
-            }
-            Text("最佳音質需要帳號有對應權限；拿不到時會自動退回較低音質。", color = silk.fg45, fontSize = 12.sp,
-                modifier = Modifier.padding(top = 8.dp))
-            Spacer(Modifier.height(26.dp))
             Chip("登出", false) {
                 onDismiss()
                 vm.signOut()

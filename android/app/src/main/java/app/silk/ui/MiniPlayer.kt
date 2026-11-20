@@ -56,7 +56,7 @@ fun MiniPlayer(vm: AppViewModel, onOpen: () -> Unit, onQueue: () -> Unit, modifi
             SmallControl(SilkIcons.Next, "下一首") { vm.next() }
         }
         Spacer(Modifier.width(10.dp))
-        RoundButton(SilkIcons.List, "播放清單", onQueue, size = 64.dp, iconSize = 24.dp, outlined = false,
+        RoundButton(SilkIcons.List, "播放清單", onQueue, size = 64.dp, iconSize = 30.dp, outlined = false,
             modifier = Modifier.clip(CircleShape).background(silk.sheet.copy(alpha = .9f)))
     }
 }

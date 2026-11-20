@@ -55,6 +55,7 @@ sealed interface Screen {
     data object Search : Screen
     data object Library : Screen
     data object Login : Screen
+    data object Settings : Screen
     data class Songs(val collection: Collection) : Screen
 }
 
@@ -94,6 +95,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var screens by mutableStateOf(listOf<Screen>(Screen.Home))
         private set
     var playerOpen by mutableStateOf(false)
+    /** The player turned sideways: cover and controls on the left, lyrics on the right. The rest of the app stays upright. */
+    var landscape by mutableStateOf(false)
     var startError by mutableStateOf<String?>(null)
         private set
     var ready by mutableStateOf(false)
@@ -136,14 +139,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var liked by mutableStateOf<Set<String>>(emptySet())
         private set
 
-    var lyricSize by mutableStateOf(settings.lyricSize)
-        private set
-    var lyricAlign by mutableIntStateOf(settings.lyricAlign)
-        private set
-    var lyricBlur by mutableStateOf(settings.lyricBlur)
-        private set
-    var lyricBold by mutableStateOf(settings.lyricBold)
-        private set
     /** Where music is playing now; the lyric shift is saved for each device, to make up for Bluetooth delay. */
     var outputDevice by mutableStateOf(AudioOutput.SPEAKER)
         private set
@@ -151,8 +146,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var lyricOffset by mutableIntStateOf(0)
         private set
     private val output = AudioOutput(application) { useDevice(it) }
+
     var quality by mutableStateOf(settings.quality)
         private set
+
+    // The Windows app's settings, with the same choices and defaults.
+    /** Silk glow: 0 off, 1 soft, 2 medium, 3 strong. */
+    var glow by StoredInt(settings, "glow", 1)
+    /** Window colour: 0 follows the cover, 1 fixed dark, 2 fixed light. */
+    var colorMode by StoredInt(settings, "colorMode", 0)
+    /** Panel texture: 0 see-through, 1 solid. */
+    var panelMode by StoredInt(settings, "panelMode", 0)
+    var showRecommended by StoredFlag(settings, "showRecommended", true)
+    var showPlaylists by StoredFlag(settings, "showPlaylists", true)
+    var showAlbums by StoredFlag(settings, "showAlbums", true)
+
+    // The Windows player drawer's options, kept apart for the upright and the sideways player.
+    private val uprightLook = PlayerLook(settings, "")
+    private val sidewaysLook = PlayerLook(settings, ":land")
+
+    /** The player's look for the way it is turned now. */
+    val look: PlayerLook
+        get() = if (landscape) sidewaysLook else uprightLook
+
+    /** The colours in use: the cover's, unless a fixed colour is chosen. */
+    val themePalette: CoverPalette
+        get() = when (colorMode) {
+            1 -> CoverPalette.Default
+            2 -> CoverPalette.LightDefault
+            else -> palette
+        }
 
     private val _toasts = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val toasts = _toasts.asSharedFlow()
@@ -492,22 +515,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Current position, read every frame by the player and lyrics. */
     fun positionMs(): Long = controller?.currentPosition ?: 0L
 
-    fun cycleMode() {
-        val player = controller ?: return
+    fun cycleMode() = changeMode(
         when (mode) {
-            PlayMode.Sequence -> {
-                player.repeatMode = Player.REPEAT_MODE_ONE
-                player.shuffleModeEnabled = false
-            }
-            PlayMode.RepeatOne -> {
-                player.repeatMode = Player.REPEAT_MODE_ALL
-                player.shuffleModeEnabled = true
-            }
-            PlayMode.Shuffle -> {
-                player.repeatMode = Player.REPEAT_MODE_ALL
-                player.shuffleModeEnabled = false
-            }
-        }
+            PlayMode.Sequence -> PlayMode.RepeatOne
+            PlayMode.RepeatOne -> PlayMode.Shuffle
+            PlayMode.Shuffle -> PlayMode.Sequence
+        },
+    )
+
+    fun changeMode(value: PlayMode) {
+        val player = controller ?: return
+        player.repeatMode = if (value == PlayMode.RepeatOne) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_ALL
+        player.shuffleModeEnabled = value == PlayMode.Shuffle
     }
 
     fun playNext(song: Song) {
@@ -565,26 +584,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ---------------------------------------------------------------- lyric options
-
-    fun changeLyricSize(value: Float) {
-        lyricSize = value
-        settings.lyricSize = value
-    }
-
-    fun changeLyricAlign(value: Int) {
-        lyricAlign = value
-        settings.lyricAlign = value
-    }
-
-    fun changeLyricBlur(value: Boolean) {
-        lyricBlur = value
-        settings.lyricBlur = value
-    }
-
-    fun changeLyricBold(value: Boolean) {
-        lyricBold = value
-        settings.lyricBold = value
-    }
 
     fun shiftLyrics(deltaMs: Int) {
         lyricOffset = (lyricOffset + deltaMs).coerceIn(-MAX_OFFSET, MAX_OFFSET)

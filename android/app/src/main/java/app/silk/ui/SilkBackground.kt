@@ -22,18 +22,28 @@ import androidx.compose.ui.graphics.toArgb
 
 /** The same flowing silk as the Windows app (an AGSL port of its pixel shader). Android 13+; a gradient before that. */
 @Composable
-fun SilkBackground(moving: Boolean, modifier: Modifier = Modifier) {
+fun SilkBackground(moving: Boolean, glow: Float = .35f, modifier: Modifier = Modifier) {
     val colors = LocalSilk.current
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        ShaderSilk(moving, colors, modifier)
-    } else {
+        ShaderSilk(moving, glow, colors, modifier)
+    } else if (glow > 0f) {
         Box(modifier.fillMaxSize().background(Brush.linearGradient(listOf(colors.a, colors.b, colors.a))))
+    } else {
+        Box(modifier.fillMaxSize().background(colors.a))
     }
+}
+
+/** The Windows app's four glow strengths: off, soft, medium, strong. */
+fun glowFor(level: Int) = when (level) {
+    0 -> 0f
+    2 -> .68f
+    3 -> 1f
+    else -> .35f
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-private fun ShaderSilk(moving: Boolean, colors: SilkColors, modifier: Modifier) {
+private fun ShaderSilk(moving: Boolean, glow: Float, colors: SilkColors, modifier: Modifier) {
     val shader = remember { RuntimeShader(SHADER) }
     var time by remember { mutableFloatStateOf(8f) }
     val speed by rememberUpdatedState(if (moving) 1f else .35f)
@@ -61,7 +71,7 @@ private fun ShaderSilk(moving: Boolean, colors: SilkColors, modifier: Modifier) 
             .drawBehind {
                 shader.setFloatUniform("size", size.width, size.height)
                 shader.setFloatUniform("time", time)
-                shader.setFloatUniform("glow", .35f)
+                shader.setFloatUniform("glow", glow)
                 shader.setColorUniform("colorA", colors.a.toArgb())
                 shader.setColorUniform("colorB", colors.b.toArgb())
                 shader.setColorUniform("colorC", colors.c.toArgb())

@@ -58,7 +58,6 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val LEAD = .15
-private const val ACTIVE_SCALE = 1.06f
 private val SIDE = 28.dp
 
 /** The playback position in milliseconds, refreshed every frame; reading it in a draw block costs no recomposition. */
@@ -91,19 +90,23 @@ fun LyricsView(vm: AppViewModel, modifier: Modifier = Modifier) {
     // The lyric clock: playback position plus this song's lyric shift.
     val position = remember { derivedStateOf { playback.value + vm.lyricOffset } }
     val timed = lines.any { it.timed }
-    val align = vm.lyricAlign
-    val fontSize = vm.lyricSize
+    val look = vm.look
+    val align = look.lyricAlign
+    val fontSize = look.lyricSize
+    val activeScale = look.lyricScale / 100f
+    val dimmed = look.lyricDim / 100f
 
     BoxWithConstraints(modifier.clipToBounds().fadeEdges({ 1f }, { 1f }, topSize = 56.dp, bottomSize = 72.dp)) {
         val density = LocalDensity.current
         val measurer = rememberTextMeasurer()
         val sidePx = with(density) { SIDE.toPx() }
-        val textWidthPx = ((constraints.maxWidth - sidePx * 2) / ACTIVE_SCALE).toInt().coerceAtLeast(1)
+        val textWidthPx = ((constraints.maxWidth - sidePx * 2) / activeScale).toInt().coerceAtLeast(1)
         val textWidth = with(density) { textWidthPx.toDp() }
         val viewHeight = constraints.maxHeight.toFloat()
         val lineStyle = TextStyle(fontSize = fontSize.sp, fontWeight = FontWeight.SemiBold, lineHeight = (fontSize * 1.28f).sp)
         val creditStyle = TextStyle(fontSize = (fontSize * .62f).sp, fontWeight = FontWeight.Normal, lineHeight = (fontSize * .9f).sp)
-        val gap = with(density) { (fontSize * .7f).sp.toPx() }
+        // Line pitch, as on Windows, in multiples of the font size; the gap is what is left after the line itself.
+        val gap = with(density) { (fontSize * (look.lyricSpacing / 10f - 1.28f).coerceAtLeast(.2f)).sp.toPx() }
         val dotBox = with(density) { (fontSize * 1.1f).sp.toPx() }
 
         val heights = remember(lines, textWidthPx, fontSize) {
@@ -189,9 +192,11 @@ fun LyricsView(vm: AppViewModel, modifier: Modifier = Modifier) {
                         distance = abs(i - focus),
                         timed = timed,
                         browsing = browsing,
-                        blur = vm.lyricBlur,
-                        bold = vm.lyricBold,
+                        blur = look.lyricBlur,
+                        bold = look.lyricBold,
                         align = align,
+                        activeScale = activeScale,
+                        dimmed = dimmed,
                         textWidth = textWidth,
                         style = if (line.isCredit) creditStyle else lineStyle,
                         dotBox = dotBox,
@@ -230,6 +235,8 @@ private fun LyricRow(
     blur: Boolean,
     bold: Boolean,
     align: Int,
+    activeScale: Float,
+    dimmed: Float,
     textWidth: androidx.compose.ui.unit.Dp,
     style: TextStyle,
     dotBox: Float,
@@ -267,7 +274,7 @@ private fun LyricRow(
             BreakDots(line, position, emphasis, dotBox)
             return@Box
         }
-        val dim = if (line.isCredit) .32f else if (timed) .38f else .9f
+        val dim = if (line.isCredit) dimmed * .84f else if (timed) dimmed else .9f
         Text(
             text = line.text,
             style = style.copy(fontWeight = if (line.isCredit) FontWeight.Normal else if (bold) FontWeight.SemiBold else FontWeight.Medium),
@@ -280,7 +287,7 @@ private fun LyricRow(
             modifier = Modifier
                 .width(textWidth)
                 .graphicsLayer {
-                    val scale = 1 + (ACTIVE_SCALE - 1) * emphasis
+                    val scale = 1 + (activeScale - 1) * emphasis
                     scaleX = scale
                     scaleY = scale
                     alpha = dim + (1 - dim) * emphasis

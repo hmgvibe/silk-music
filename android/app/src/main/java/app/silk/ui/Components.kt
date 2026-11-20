@@ -85,11 +85,11 @@ fun RoundButton(
 
 /** A rounded square button for the home page header. */
 @Composable
-fun SquareButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SquareButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 48.dp) {
     val silk = LocalSilk.current
     Box(
         modifier
-            .size(48.dp)
+            .size(size)
             .pressable(onClick)
             .clip(RoundedCornerShape(16.dp))
             .background(silk.fg07)
@@ -97,7 +97,7 @@ fun SquareButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = silk.fg, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = silk.fg, modifier = Modifier.size(size * .46f))
     }
 }
 

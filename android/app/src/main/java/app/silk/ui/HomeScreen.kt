@@ -41,7 +41,7 @@ fun HomeScreen(vm: AppViewModel, onAccount: () -> Unit) {
     val silk = LocalSilk.current
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -52,7 +52,7 @@ fun HomeScreen(vm: AppViewModel, onAccount: () -> Unit) {
                 if (avatar.isNotEmpty()) Cover(avatar, Modifier.size(48.dp), CircleShape)
                 else Icon(SilkIcons.User, contentDescription = "帳號", tint = silk.fg, modifier = Modifier.size(22.dp))
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     vm.profile?.name ?: "未登入", color = silk.fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
@@ -60,11 +60,13 @@ fun HomeScreen(vm: AppViewModel, onAccount: () -> Unit) {
                 )
                 Text(if (vm.signedIn) greeting() else "點頭像登入", color = silk.fg70, fontSize = 12.sp, maxLines = 1)
             }
-            SquareButton(SilkIcons.Search, "搜尋", { vm.open(Screen.Search) })
-            Spacer(Modifier.width(8.dp))
-            SquareButton(SilkIcons.Disc, "音樂庫", { vm.open(Screen.Library) })
-            Spacer(Modifier.width(8.dp))
-            SquareButton(SilkIcons.Heart, "我喜歡", { vm.openCollection(AppViewModel.LIKED) })
+            // Four buttons at the top right, as on the Windows app's side bar: search, library, liked, settings.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SquareButton(SilkIcons.Search, "搜尋", { vm.open(Screen.Search) }, size = 44.dp)
+                SquareButton(SilkIcons.Disc, "音樂庫", { vm.open(Screen.Library) }, size = 44.dp)
+                SquareButton(SilkIcons.Heart, "我喜歡", { vm.openCollection(AppViewModel.LIKED) }, size = 44.dp)
+                SquareButton(SilkIcons.Gear, "設定", { vm.open(Screen.Settings) }, size = 44.dp)
+            }
         }
 
         Box(
@@ -92,7 +94,7 @@ private fun HomeContent(vm: AppViewModel) {
             }
         }
 
-        if (home.recommended.isNotEmpty()) {
+        if (vm.showRecommended && home.recommended.isNotEmpty()) {
             item { SectionTitle("為你推薦", "播放全部") { vm.play(home.recommended, 0) } }
             val rows = home.recommended.take(6).chunked(2)
             items(rows.size) { row ->
@@ -106,11 +108,11 @@ private fun HomeContent(vm: AppViewModel) {
             }
         }
 
-        if (home.playlists.isNotEmpty()) {
+        if (vm.showPlaylists && home.playlists.isNotEmpty()) {
             item { SectionTitle("推薦歌單") }
             item { Shelf(home.playlists, vm) }
         }
-        if (home.albums.isNotEmpty()) {
+        if (vm.showAlbums && home.albums.isNotEmpty()) {
             item { SectionTitle("新碟上架") }
             item { Shelf(home.albums, vm) }
         }

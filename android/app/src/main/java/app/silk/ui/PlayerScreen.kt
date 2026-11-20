@@ -1,5 +1,14 @@
 package app.silk.ui
 
+import android.content.res.Configuration
+import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
@@ -57,28 +66,121 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.silk.data.formatTime
 
-/** Two pages, as in the sketch: the cover with its controls, then the lyrics. Dots at the top show which page is open. */
+/**
+ * Upright: two pages, as in the sketch — the cover with its controls, then the lyrics, with dots showing which is open.
+ * Sideways (the button at the top right): cover and controls on the left, lyrics on the right.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlayerScreen(vm: AppViewModel, onClose: () -> Unit) {
-    val pager = rememberPagerState { 2 }
     var options by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(52.dp)) {
-            Box(
-                Modifier.align(Alignment.CenterStart).padding(start = 10.dp).size(44.dp).pressable(onClose)
-                    .semantics { contentDescription = "收起播放器" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(SilkIcons.Down, contentDescription = null, tint = LocalSilk.current.fg, modifier = Modifier.size(24.dp))
+    val sideways = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    if (sideways) {
+        LandscapePlayer(vm, onClose) { options = true }
+    } else {
+        val pager = rememberPagerState { 2 }
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            Box(Modifier.fillMaxWidth().height(52.dp)) {
+                TopButton(SilkIcons.Down, "收起播放器", onClose, Modifier.align(Alignment.CenterStart).padding(start = 10.dp))
+                PageDots(pager.currentPage, Modifier.align(Alignment.Center))
+                TopButton(SilkIcons.Landscape, "橫屏", { vm.landscape = true }, Modifier.align(Alignment.CenterEnd).padding(end = 10.dp))
             }
-            PageDots(pager.currentPage, Modifier.align(Alignment.Center))
-        }
-        HorizontalPager(pager, Modifier.weight(1f), beyondViewportPageCount = 1) { page ->
-            if (page == 0) CoverPage(vm) else LyricsPage(vm) { options = true }
+            HorizontalPager(pager, Modifier.weight(1f), beyondViewportPageCount = 1) { page ->
+                if (page == 0) CoverPage(vm) else LyricsPage(vm) { options = true }
+            }
         }
     }
     if (options) LyricOptions(vm) { options = false }
+}
+
+@Composable
+private fun TopButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(44.dp).pressable(onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = LocalSilk.current.fg, modifier = Modifier.size(24.dp))
+    }
+}
+
+/** Sideways: the cover, title and controls fill the left, the lyrics the right; the buttons sit in the top corners. */
+@Composable
+private fun LandscapePlayer(vm: AppViewModel, onClose: () -> Unit, onOptions: () -> Unit) {
+    val silk = LocalSilk.current
+    val song = vm.current
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout)) {
+        Row(Modifier.fillMaxSize()) {
+            Column(
+                Modifier.weight(.44f).fillMaxHeight().padding(start = 60.dp, end = 16.dp, top = 20.dp, bottom = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                PlayerCover(vm, Modifier.weight(1f, fill = false).aspectRatio(1f))
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    song?.title ?: "還沒有播放", color = silk.fg, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                if (song != null) {
+                    ArtistLink(song, vm::openSinger) {
+                        Text(song.artist, color = silk.fg70, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                ProgressBar(vm)
+                Spacer(Modifier.height(4.dp))
+                Controls(vm, compact = true)
+            }
+            LyricsView(vm, Modifier.weight(.56f).fillMaxHeight().padding(top = 52.dp, bottom = 10.dp, end = 6.dp))
+        }
+        TopButton(SilkIcons.Down, "收起播放器", onClose, Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 6.dp))
+        Row(Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 6.dp)) {
+            TopButton(SilkIcons.Sliders, "歌詞設定", onOptions)
+            TopButton(SilkIcons.Portrait, "豎屏", { vm.landscape = false })
+        }
+    }
+}
+
+/** The cover, a little smaller while paused. */
+@Composable
+private fun PlayerCover(vm: AppViewModel, modifier: Modifier) {
+    val silk = LocalSilk.current
+    // Small, standard and large, as on Windows; a little smaller again while paused.
+    val size = when (vm.look.coverSize) {
+        0 -> .74f
+        2 -> 1f
+        else -> .94f
+    }
+    val scale by androidx.compose.animation.core.animateFloatAsState((if (vm.isPlaying) 1f else .9f) * size, label = "cover")
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Cover(
+            vm.current?.cover.orEmpty(),
+            Modifier
+                .fillMaxSize(scale)
+                .shadow(28.dp * scale, RoundedCornerShape(30.dp), ambientColor = silk.a, spotColor = silk.a),
+            RoundedCornerShape(30.dp),
+        )
+    }
+}
+
+@Composable
+private fun Controls(vm: AppViewModel, compact: Boolean = false) {
+    val song = vm.current
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        val liked = song != null && song.mid in vm.liked
+        PlainButton(if (liked) SilkIcons.HeartFilled else SilkIcons.Heart, if (liked) "取消收藏" else "收藏") { song?.let(vm::toggleLike) }
+        val side = if (compact) 46.dp else 54.dp
+        val middle = if (compact) 58.dp else 70.dp
+        RoundButton(SilkIcons.Prev, "上一首", vm::previous, size = side, iconSize = side * .37f)
+        RoundButton(if (vm.isPlaying) SilkIcons.Pause else SilkIcons.Play, "播放或暫停", vm::toggle, size = middle, iconSize = middle * .37f)
+        RoundButton(SilkIcons.Next, "下一首", vm::next, size = side, iconSize = side * .37f)
+        val (modeIcon, modeLabel) = when (vm.mode) {
+            PlayMode.Sequence -> SilkIcons.Repeat to "清單循環"
+            PlayMode.RepeatOne -> SilkIcons.RepeatOne to "單曲循環"
+            PlayMode.Shuffle -> SilkIcons.Shuffle to "隨機播放"
+        }
+        PlainButton(modeIcon, modeLabel) { vm.cycleMode() }
+    }
 }
 
 @Composable
@@ -98,20 +200,11 @@ private fun CoverPage(vm: AppViewModel) {
     val silk = LocalSilk.current
     val song = vm.current
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 30.dp),
+        Modifier.fillMaxSize().padding(horizontal = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.weight(.8f))
-        val scale by androidx.compose.animation.core.animateFloatAsState(if (vm.isPlaying) 1f else .9f, label = "cover")
-        Box(Modifier.fillMaxWidth().widthIn(max = 420.dp).aspectRatio(1f), contentAlignment = Alignment.Center) {
-            Cover(
-                song?.cover.orEmpty(),
-                Modifier
-                    .fillMaxSize(scale)
-                    .shadow(28.dp * scale, RoundedCornerShape(30.dp), ambientColor = silk.a, spotColor = silk.a),
-                RoundedCornerShape(30.dp),
-            )
-        }
+        PlayerCover(vm, Modifier.fillMaxWidth().widthIn(max = 460.dp).aspectRatio(1f))
         Spacer(Modifier.height(30.dp))
         Text(
             song?.title ?: "還沒有播放", color = silk.fg, fontSize = 21.sp, fontWeight = FontWeight.SemiBold,
@@ -126,21 +219,9 @@ private fun CoverPage(vm: AppViewModel) {
             Spacer(Modifier.height(25.dp))
         }
         Spacer(Modifier.height(23.dp))
-        ProgressBar(vm)
+        Box(Modifier.padding(horizontal = 12.dp)) { ProgressBar(vm) }
         Spacer(Modifier.height(22.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            val liked = song != null && song.mid in vm.liked
-            PlainButton(if (liked) SilkIcons.HeartFilled else SilkIcons.Heart, if (liked) "取消收藏" else "收藏") { song?.let(vm::toggleLike) }
-            RoundButton(SilkIcons.Prev, "上一首", vm::previous, size = 54.dp, iconSize = 20.dp)
-            RoundButton(if (vm.isPlaying) SilkIcons.Pause else SilkIcons.Play, "播放或暫停", vm::toggle, size = 70.dp, iconSize = 26.dp)
-            RoundButton(SilkIcons.Next, "下一首", vm::next, size = 54.dp, iconSize = 20.dp)
-            val (modeIcon, modeLabel) = when (vm.mode) {
-                PlayMode.Sequence -> SilkIcons.Repeat to "順序播放"
-                PlayMode.RepeatOne -> SilkIcons.RepeatOne to "單曲循環"
-                PlayMode.Shuffle -> SilkIcons.Shuffle to "隨機播放"
-            }
-            PlainButton(modeIcon, modeLabel) { vm.cycleMode() }
-        }
+        Box(Modifier.padding(horizontal = 12.dp)) { Controls(vm) }
         Spacer(Modifier.weight(1.2f))
     }
 }
@@ -239,32 +320,62 @@ private fun LyricOptions(vm: AppViewModel, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss, containerColor = silk.sheet, contentColor = silk.fg,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 36.dp)) {
+        // Sideways the sheet is taller than the screen, so it scrolls.
+        val scroll = rememberScrollState()
+        Column(Modifier.edgeFade(scroll).verticalScroll(scroll).padding(start = 24.dp, end = 24.dp, bottom = 36.dp)) {
             Text("歌詞設定", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = silk.fg)
-            Spacer(Modifier.height(18.dp))
+            Text(
+                if (vm.landscape) "橫屏的設定，和豎屏分開保存" else "豎屏的設定，和橫屏分開保存",
+                color = silk.fg45, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp),
+            )
+            Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("字體大小", color = silk.fg, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                Text("${vm.lyricSize.toInt()}", color = silk.fg70, fontSize = 14.sp)
+                Text("${vm.look.lyricSize.toInt()}", color = silk.fg70, fontSize = 14.sp)
             }
             Slider(
-                value = vm.lyricSize, onValueChange = { vm.changeLyricSize(it.toInt().toFloat()) }, valueRange = 18f..36f,
+                value = vm.look.lyricSize, onValueChange = { vm.look.lyricSize = it.toInt().toFloat() }, valueRange = 18f..36f,
                 colors = SliderDefaults.colors(thumbColor = silk.fg, activeTrackColor = silk.fg, inactiveTrackColor = silk.fg24),
             )
             Spacer(Modifier.height(10.dp))
             Text("對齊方式", color = silk.fg, fontSize = 15.sp)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf("靠左", "置中", "靠右").forEachIndexed { i, label -> Chip(label, vm.lyricAlign == i) { vm.changeLyricAlign(i) } }
+                listOf("靠左", "置中", "靠右").forEachIndexed { i, label -> Chip(label, vm.look.lyricAlign == i) { vm.look.lyricAlign = i } }
             }
             Spacer(Modifier.height(18.dp))
             Text("效果", color = silk.fg, fontSize = 15.sp)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Chip("遠處模糊", vm.lyricBlur) { vm.changeLyricBlur(!vm.lyricBlur) }
-                Chip("目前行加粗", vm.lyricBold) { vm.changeLyricBold(!vm.lyricBold) }
+                Chip("遠處模糊", vm.look.lyricBlur) { vm.look.lyricBlur = !vm.look.lyricBlur }
+                Chip("目前行加粗", vm.look.lyricBold) { vm.look.lyricBold = !vm.look.lyricBold }
             }
             Spacer(Modifier.height(18.dp))
             LyricShift(vm)
+            Spacer(Modifier.height(8.dp))
+            Amount("目前行放大", "${vm.look.lyricScale}%")
+            Slider(
+                value = vm.look.lyricScale.toFloat(), onValueChange = { vm.look.lyricScale = (it / 2).roundToInt() * 2 }, valueRange = 100f..170f,
+                colors = sliderColors(),
+            )
+            Amount("行距", "%.1f 倍".format(vm.look.lyricSpacing / 10f))
+            Slider(
+                value = vm.look.lyricSpacing.toFloat(), onValueChange = { vm.look.lyricSpacing = it.roundToInt() }, valueRange = 16f..40f,
+                colors = sliderColors(),
+            )
+            Amount("其他行亮度", "${vm.look.lyricDim}%")
+            Slider(
+                value = vm.look.lyricDim.toFloat(), onValueChange = { vm.look.lyricDim = it.roundToInt() }, valueRange = 15f..100f,
+                colors = sliderColors(),
+            )
+            Spacer(Modifier.height(6.dp))
+            Text("封面大小", color = silk.fg, fontSize = 15.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("小", "標準", "大").forEachIndexed { i, label -> Chip(label, vm.look.coverSize == i) { vm.look.coverSize = i } }
+            }
+            Spacer(Modifier.height(22.dp))
+            Chip("恢復預設", false) { vm.look.reset() }
         }
     }
 }
@@ -302,6 +413,20 @@ private fun LyricShift(vm: AppViewModel) {
         StepButton("+0.1", "歌詞提前 0.1 秒") { vm.shiftLyrics(100) }
         StepButton("+0.5", "歌詞提前 0.5 秒") { vm.shiftLyrics(500) }
     }
+}
+
+@Composable
+private fun Amount(label: String, value: String) {
+    val silk = LocalSilk.current
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+        Text(label, color = silk.fg, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Text(value, color = silk.fg70, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun sliderColors() = LocalSilk.current.let { silk ->
+    SliderDefaults.colors(thumbColor = silk.fg, activeTrackColor = silk.fg, inactiveTrackColor = silk.fg24)
 }
 
 @Composable

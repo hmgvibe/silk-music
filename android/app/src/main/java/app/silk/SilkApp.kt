@@ -41,19 +41,6 @@ class Settings(private val prefs: android.content.SharedPreferences) {
         get() = prefs.getString("quality", "best") ?: "best"
         set(value) = prefs.edit().putString("quality", value).apply()
 
-    var lyricSize: Float
-        get() = prefs.getFloat("lyricSize", 26f)
-        set(value) = prefs.edit().putFloat("lyricSize", value).apply()
-
-    /** 0 left, 1 centre, 2 right. */
-    var lyricAlign: Int
-        get() = prefs.getInt("lyricAlign", 1)
-        set(value) = prefs.edit().putInt("lyricAlign", value).apply()
-
-    var lyricBlur: Boolean
-        get() = prefs.getBoolean("lyricBlur", true)
-        set(value) = prefs.edit().putBoolean("lyricBlur", value).apply()
-
     init {
         // An earlier build saved the shift per song; it now belongs to the output device.
         val stale = prefs.all.keys.filter { it.startsWith("lyricOffset:") }
@@ -67,9 +54,12 @@ class Settings(private val prefs: android.content.SharedPreferences) {
         if (ms == 0) remove("deviceOffset:$device") else putInt("deviceOffset:$device", ms)
     }.apply()
 
-    var lyricBold: Boolean
-        get() = prefs.getBoolean("lyricBold", true)
-        set(value) = prefs.edit().putBoolean("lyricBold", value).apply()
+    fun int(key: String, default: Int) = prefs.getInt(key, default)
+    fun float(key: String, default: Float) = prefs.getFloat(key, default)
+    fun putFloat(key: String, value: Float) = prefs.edit().putFloat(key, value).apply()
+    fun putInt(key: String, value: Int) = prefs.edit().putInt(key, value).apply()
+    fun flag(key: String, default: Boolean) = prefs.getBoolean(key, default)
+    fun putFlag(key: String, value: Boolean) = prefs.edit().putBoolean(key, value).apply()
 
     var searchHistory: List<String>
         get() = prefs.getString("searchHistory", "")!!.split('\n').filter { it.isNotBlank() }

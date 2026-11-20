@@ -31,6 +31,21 @@ object SilkIcons {
     val Grip = icon("M9 6 H9.01 M15 6 H15.01 M9 12 H9.01 M15 12 H15.01 M9 18 H9.01 M15 18 H15.01", width = 2.6f)
     val More = icon("M5 12 H5.01 M12 12 H12.01 M19 12 H19.01", width = 2.8f)
 
+    /** A gear with eight teeth: settings. */
+    val Gear = icon(
+        "M18.95 10.14 L21.51 10.66 L21.51 13.34 L18.95 13.86 L18.24 15.60 L19.67 17.78 L17.78 19.67 L15.60 18.24 " +
+            "L13.86 18.95 L13.34 21.51 L10.66 21.51 L10.14 18.95 L8.40 18.24 L6.22 19.67 L4.33 17.78 L5.76 15.60 " +
+            "L5.05 13.86 L2.49 13.34 L2.49 10.66 L5.05 10.14 L5.76 8.40 L4.33 6.22 L6.22 4.33 L8.40 5.76 " +
+            "L10.14 5.05 L10.66 2.49 L13.34 2.49 L13.86 5.05 L15.60 5.76 L17.78 4.33 L19.67 6.22 L18.24 8.40 Z " +
+            "M12 8.8 A3.2 3.2 0 1 0 12 15.2 A3.2 3.2 0 1 0 12 8.8 Z",
+        width = 1.6f,
+    )
+
+    /** A phone lying on its side: switch to landscape. */
+    val Landscape = icon("M3 8.5 A1.5 1.5 0 0 1 4.5 7 H19.5 A1.5 1.5 0 0 1 21 8.5 V15.5 A1.5 1.5 0 0 1 19.5 17 H4.5 A1.5 1.5 0 0 1 3 15.5 Z M17.6 10.5 V13.5")
+    /** A phone standing up: back to portrait. */
+    val Portrait = icon("M8.5 3 H15.5 A1.5 1.5 0 0 1 17 4.5 V19.5 A1.5 1.5 0 0 1 15.5 21 H8.5 A1.5 1.5 0 0 1 7 19.5 V4.5 A1.5 1.5 0 0 1 8.5 3 Z M10.5 17.6 H13.5")
+
     private fun icon(data: String, filled: Boolean = false, width: Float = 1.8f): ImageVector =
         ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
             .addPath(
