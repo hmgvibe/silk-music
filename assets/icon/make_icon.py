@@ -2,6 +2,7 @@
 turning over once and ending in a swallowtail cut.
 
 Writes the master PNG and the Windows .ico. Usage: python make_icon.py [preview.png]
+With --android, writes the Android adaptive icon layers instead (see make_android).
 """
 import math
 import struct
@@ -15,6 +16,10 @@ from PIL import Image, ImageDraw
 HERE = Path(__file__).resolve().parent
 ICO_PATH = HERE.parents[1] / "src" / "Silk" / "silk.ico"
 MASTER_PATH = HERE / "silk-1024.png"
+ANDROID_RES = HERE.parents[1] / "android" / "app" / "src" / "main" / "res" / "mipmap-xxxhdpi"
+# An adaptive icon layer is 108dp; launchers may mask all but the central 66dp circle.
+ANDROID_LAYER = 432
+ANDROID_MARK_HEIGHT = 0.44
 ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]
 LARGEST_BITMAP_ENTRY = 48
 LARGEST_SNAPPED_SIZE = 32
@@ -155,7 +160,8 @@ def over(base, color, alpha):
     return base * (1 - a) + color * a
 
 
-def render(size):
+def render(size, layers=False):
+    """The finished icon; with layers=True, the tile's gradient (full bleed) and the mark alone, for Android."""
     d = detail_for(size)
     canvas = Canvas(size, d["zoom"])
     axis = (np.arange(size, dtype=np.float32) + 0.5) / size
@@ -184,7 +190,20 @@ def render(size):
     note, draw = canvas.blank()
     draw.polygon(canvas.points(head_placed, placed=True), fill=255)
     draw.rectangle([stem_left * canvas.full, top * canvas.full, stem_right * canvas.full - 1, stem_bottom * canvas.full], fill=255)
-    color = over(color, rgb(NOTE), canvas.finish(note))
+    note = canvas.finish(note)
+    # The mark alone, premultiplied, for the Android foreground layer.
+    mark = np.zeros((size, size, 3), np.float32)
+    mark_alpha = np.zeros((size, size), np.float32)
+
+    def paint(base, paint_color, alpha):
+        nonlocal mark, mark_alpha
+        a = alpha[..., None]
+        mark = mark * (1 - a) + paint_color * a
+        mark_alpha = mark_alpha * (1 - alpha) + alpha
+        return over(base, paint_color, alpha)
+
+    background = color
+    color = paint(color, rgb(NOTE), note)
 
     half = d["ribbon"] * canvas.zoom
     curve = bezier(
@@ -195,9 +214,13 @@ def render(size):
     )
     front, back = draw_ribbon(canvas, curve, twist_width(half, d["narrow"]))
     back_shade = np.clip((v - 0.35) * 4, 0, 1)[..., None]
-    color = over(color, rgb(RIBBON_BACK_TOP) * (1 - back_shade) + rgb(RIBBON_BACK_BOTTOM) * back_shade, back)
+    color = paint(color, rgb(RIBBON_BACK_TOP) * (1 - back_shade) + rgb(RIBBON_BACK_BOTTOM) * back_shade, back)
     front_shade = np.clip((u - 0.5) * 3, 0, 1)[..., None]
-    color = over(color, rgb(NOTE) * (1 - front_shade) + rgb(RIBBON_FRONT_SHADE) * front_shade, front)
+    color = paint(color, rgb(NOTE) * (1 - front_shade) + rgb(RIBBON_FRONT_SHADE) * front_shade, front)
+    if layers:
+        straight = mark / np.maximum(mark_alpha, 1e-6)[..., None]
+        mark_image = Image.fromarray(np.clip(np.dstack([straight, mark_alpha * 255]) + 0.5, 0, 255).astype(np.uint8), "RGBA")
+        return mark_image
 
     result = np.dstack([color, tile * 255])
     return Image.fromarray(np.clip(result + 0.5, 0, 255).astype(np.uint8), "RGBA")
@@ -260,7 +283,36 @@ def preview(path, images):
     sheet.save(path)
 
 
+def make_android():
+    """Adaptive icon layers: the tile's gradient fills the background layer edge to edge, and the mark sits
+    alone on the foreground, sized to stay inside the safe zone whatever shape the launcher cuts."""
+    size = ANDROID_LAYER
+    # The gradient as the tile has it, laid out over the visible 72dp of the 108dp layer.
+    axis = ((np.arange(size, dtype=np.float32) + 0.5) / size - 1 / 6) * 1.5
+    u, v = np.meshgrid(axis, axis)
+    k = np.clip(u * 0.35 + v * 0.8 - 0.1, 0, 1)[..., None]
+    gradient = rgb(TILE_TOP) * (1 - k) + rgb(TILE_BOTTOM) * k
+    Image.fromarray(np.clip(gradient + 0.5, 0, 255).astype(np.uint8), "RGB").save(ANDROID_RES / "ic_launcher_background.png", optimize=True)
+
+    mark = render(1024, layers=True)
+    box = mark.getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox()
+    mark = mark.crop(box)
+    scale = ANDROID_MARK_HEIGHT * size / mark.height
+    mark = mark.resize((round(mark.width * scale), round(mark.height * scale)), Image.LANCZOS)
+    foreground = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    foreground.paste(mark, ((size - mark.width) // 2, (size - mark.height) // 2), mark)
+    foreground.save(ANDROID_RES / "ic_launcher_foreground.png", optimize=True)
+
+    # Themed icons: the same mark in one colour, which the launcher tints.
+    white = Image.new("RGBA", foreground.size, (255, 255, 255, 0))
+    white.putalpha(foreground.getchannel("A"))
+    white.save(ANDROID_RES / "ic_launcher_monochrome.png", optimize=True)
+
+
 def main():
+    if "--android" in sys.argv:
+        make_android()
+        return
     images = [render(size) for size in ICO_SIZES]
     master = render(1024)
     master.save(MASTER_PATH, optimize=True)
