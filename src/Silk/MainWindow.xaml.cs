@@ -56,8 +56,9 @@ public partial class MainWindow : Window
         PillWave.Seeked += model.SeekRatio;
         PlayerWave.Seeked += model.SeekRatio;
         model.PropertyChanged += OnModelChanged;
-        LyricView.Attach(model.Lyrics, () => model.PlaybackPosition);
-        LyricView.Seek += model.SeekTo;
+        // The lyric clock runs ahead of or behind playback by the output device's shift (Bluetooth adds delay).
+        LyricView.Attach(model.Lyrics, () => model.PlaybackPosition + model.LyricOffset);
+        LyricView.Seek += seconds => model.SeekTo(Math.Max(0, seconds - model.LyricOffset));
         model.LyricLayoutChanged += LayoutLyrics;
         model.ToastRaised += ShowToast;
         model.SongsReset += () =>
@@ -395,7 +396,23 @@ public partial class MainWindow : Window
         SlideDrawer(PlayerOptionsLayer, PlayerOptionsDrawer, PlayerOptionsShift, open, -(PlayerOptionsDrawer.Width + 16), () => _playerOptionsOpen);
     }
 
-    private void OnPlayerOptionsOpen(object sender, RoutedEventArgs e) => SetPlayerOptionsOpen(true);
+    private void OnPlayerOptionsOpen(object sender, RoutedEventArgs e)
+    {
+        _model.RefreshOutput();
+        SetPlayerOptionsOpen(true);
+    }
+
+    private void OnLyricShift(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is string tag && int.TryParse(tag, out var ms)) _model.ShiftLyrics(ms);
+    }
+
+    private void OnLyricShiftReset(object sender, RoutedEventArgs e) => _model.ResetLyricShift();
+
+    private void OnPlayerArtist(object sender, RoutedEventArgs e)
+    {
+        if (_model.Current is { } song) _model.OpenSingerOf(song);
+    }
     private void OnPlayerOptionsClose(object sender, RoutedEventArgs e) => SetPlayerOptionsOpen(false);
     private void OnPlayerOptionsScrim(object sender, MouseButtonEventArgs e) => SetPlayerOptionsOpen(false);
 

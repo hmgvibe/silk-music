@@ -23,6 +23,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import app.silk.SilkApp
+import app.silk.data.Artist
 import app.silk.data.Collection
 import app.silk.data.CollectionKind
 import app.silk.data.LyricLine
@@ -30,6 +31,8 @@ import app.silk.data.Lrc
 import app.silk.data.MusicSource
 import app.silk.data.Song
 import app.silk.data.UserProfile
+import app.silk.playback.AudioOutput
+import app.silk.playback.OutputDevice
 import app.silk.playback.PlaybackService
 import app.silk.playback.SongItems
 import coil.imageLoader
@@ -141,6 +144,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var lyricBold by mutableStateOf(settings.lyricBold)
         private set
+    /** Where music is playing now; the lyric shift is saved for each device, to make up for Bluetooth delay. */
+    var outputDevice by mutableStateOf(AudioOutput.SPEAKER)
+        private set
+    /** The output device's lyric shift in milliseconds; positive shows lyrics earlier. */
+    var lyricOffset by mutableIntStateOf(0)
+        private set
+    private val output = AudioOutput(application) { useDevice(it) }
     var quality by mutableStateOf(settings.quality)
         private set
 
@@ -154,6 +164,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var searchJob: Job? = null
 
     init {
+        useDevice(output.current())
+        output.start()
         viewModelScope.launch { start() }
     }
 
@@ -213,6 +225,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // ---------------------------------------------------------------- pages
 
     fun open(screen: Screen) {
+        if (screens.last() == screen) return
         if (screen == Screen.Login && login.image == null) startLogin(login.channel)
         if (screen == Screen.Library) loadLibrary()
         screens = screens + screen
@@ -268,6 +281,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val key = keyOf(collection)
         if (lists[key]?.songs?.isNotEmpty() == true && collection.kind != CollectionKind.Guess) return
         loadSongs(collection)
+    }
+
+    /** Opens a singer's page, closing the player if it is open. */
+    fun openSinger(artist: Artist) {
+        val music = source ?: return
+        playerOpen = false
+        openCollection(music.singerPage(artist))
     }
 
     fun loadSongs(collection: Collection) {
@@ -566,6 +586,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         settings.lyricBold = value
     }
 
+    fun shiftLyrics(deltaMs: Int) {
+        lyricOffset = (lyricOffset + deltaMs).coerceIn(-MAX_OFFSET, MAX_OFFSET)
+        settings.setLyricOffset(outputDevice.key, lyricOffset)
+    }
+
+    fun resetLyricShift() {
+        lyricOffset = 0
+        settings.setLyricOffset(outputDevice.key, 0)
+    }
+
+    /** Checks the output again; a route can change without a device being added or removed. */
+    fun refreshOutput() = useDevice(output.current())
+
+    private fun useDevice(device: OutputDevice) {
+        if (device == outputDevice && lyricOffset == settings.lyricOffset(device.key)) return
+        outputDevice = device
+        lyricOffset = settings.lyricOffset(device.key)
+    }
+
     // ---------------------------------------------------------------- sync
 
     private fun sync() {
@@ -593,6 +632,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val song = player.currentMediaItem?.let(SongItems::toSong)
         if (song?.mid == current?.mid) return
         current = song
+        refreshOutput()
         if (song == null) return
         loadLyrics(song)
         loadPalette(song)
@@ -647,12 +687,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        output.stop()
         controller?.release()
         controller = null
         super.onCleared()
     }
 
     companion object {
+        const val MAX_OFFSET = 10_000
         val GUESS = Collection(CollectionKind.Guess, "guess", "猜你喜歡", "跟著你的口味", "")
         val DAILY = Collection(CollectionKind.Daily, "daily", "每日 30 首", "每天更新", "")
         val LIKED = Collection(CollectionKind.Liked, "liked", "我喜歡", "你收藏的歌", "")

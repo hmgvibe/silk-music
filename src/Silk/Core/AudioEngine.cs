@@ -29,6 +29,26 @@ public sealed class AudioEngine : IDisposable
     public event Action? Ended;
     public event Action<string>? Failed;
     public event Action<double>? DurationKnown;
+    /// <summary>The output stream opened on a device, possibly a different one than before.</summary>
+    public event Action? DeviceOpened;
+
+    /// <summary>The device the output stream plays on, or null before the first track.</summary>
+    public OutputDevice? Device { get; private set; }
+
+    /// <summary>The device music plays on now, or would play on if a track started.</summary>
+    public OutputDevice CurrentDevice()
+    {
+        if (Device is { } open) return open;
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            return OutputDevice.From(enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia));
+        }
+        catch (Exception)
+        {
+            return OutputDevice.Unknown;
+        }
+    }
 
     public bool IsPlaying { get; private set; }
     public double Duration => Volatile.Read(ref _durationSeconds);
@@ -139,7 +159,9 @@ public sealed class AudioEngine : IDisposable
             output.Init(new SampleToWaveProvider(_tap));
             output.PlaybackStopped += OnPlaybackStopped;
             _output = output;
+            Device = OutputDevice.From(device);
         }
+        DeviceOpened?.Invoke();
     }
 
     private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
@@ -150,6 +172,7 @@ public sealed class AudioEngine : IDisposable
         {
             _output?.Dispose();
             _output = null;
+            Device = null;
         }
         IsPlaying = false;
         Failed?.Invoke("音訊裝置已變更");
@@ -280,5 +303,17 @@ public sealed class AudioEngine : IDisposable
         {
             for (var i = offset; i < offset + count; i++) target[i] = 0;
         }
+    }
+}
+
+/// <summary>A playback device: <see cref="Id"/> keys saved settings, <see cref="Name"/> is shown to the user.</summary>
+public sealed record OutputDevice(string Id, string Name)
+{
+    public static readonly OutputDevice Unknown = new("", "預設輸出");
+
+    public static OutputDevice From(MMDevice device)
+    {
+        var name = device.FriendlyName;
+        return new OutputDevice(device.ID, string.IsNullOrWhiteSpace(name) ? "預設輸出" : name);
     }
 }

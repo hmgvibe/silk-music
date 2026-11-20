@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.silk.data.Artist
 import app.silk.data.Song
 import coil.compose.AsyncImage
 
@@ -59,6 +60,7 @@ fun RoundButton(
     size: Dp = 48.dp,
     iconSize: Dp = size * .42f,
     filled: Boolean = false,
+    outlined: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val silk = LocalSilk.current
@@ -67,7 +69,13 @@ fun RoundButton(
             .size(size)
             .pressable(onClick)
             .clip(CircleShape)
-            .then(if (filled) Modifier.background(silk.fg) else Modifier.border(1.4.dp, silk.fg45, CircleShape))
+            .then(
+                when {
+                    filled -> Modifier.background(silk.fg)
+                    outlined -> Modifier.border(1.4.dp, silk.fg45, CircleShape)
+                    else -> Modifier
+                },
+            )
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -116,6 +124,7 @@ fun SongRow(
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     onLike: () -> Unit,
+    onSinger: (Artist) -> Unit = {},
 ) {
     val silk = LocalSilk.current
     var menu by remember { mutableStateOf(false) }
@@ -152,7 +161,7 @@ fun SongRow(
                 Icon(SilkIcons.More, contentDescription = null, tint = silk.fg70, modifier = Modifier.size(20.dp))
             }
         }
-        SongMenu(menu, onDismiss = { menu = false }, isLiked, onPlayNext, onAddToQueue, onLike)
+        SongMenu(menu, onDismiss = { menu = false }, isLiked, onPlayNext, onAddToQueue, onLike, song.singers, onSinger)
     }
 }
 
@@ -164,6 +173,8 @@ fun SongMenu(
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     onLike: () -> Unit,
+    singers: List<Artist> = emptyList(),
+    onSinger: (Artist) -> Unit = {},
 ) {
     val silk = LocalSilk.current
     DropdownMenu(
@@ -173,6 +184,43 @@ fun SongMenu(
         DropdownMenuItem(text = { Text("下一首播放", color = silk.fg) }, onClick = { onDismiss(); onPlayNext() })
         DropdownMenuItem(text = { Text("加入播放清單", color = silk.fg) }, onClick = { onDismiss(); onAddToQueue() })
         DropdownMenuItem(text = { Text(if (isLiked) "取消收藏" else "收藏", color = silk.fg) }, onClick = { onDismiss(); onLike() })
+        singers.take(4).forEach { singer ->
+            DropdownMenuItem(
+                text = { Text("歌手：${singer.name}", color = silk.fg, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                onClick = { onDismiss(); onSinger(singer) },
+            )
+        }
+    }
+}
+
+/** A song's artist line that opens the singer's page; with several singers it asks which one. */
+@Composable
+fun ArtistLink(song: Song, onSinger: (Artist) -> Unit, content: @Composable () -> Unit) {
+    val silk = LocalSilk.current
+    var choosing by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .then(
+                    if (song.singers.isEmpty()) Modifier
+                    else Modifier.pressable {
+                        if (song.singers.size == 1) onSinger(song.singers[0]) else choosing = true
+                    },
+                )
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        ) { content() }
+        DropdownMenu(
+            expanded = choosing, onDismissRequest = { choosing = false },
+            containerColor = silk.sheet, shape = RoundedCornerShape(16.dp),
+        ) {
+            song.singers.forEach { singer ->
+                DropdownMenuItem(
+                    text = { Text(singer.name, color = silk.fg, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = { choosing = false; onSinger(singer) },
+                )
+            }
+        }
     }
 }
 

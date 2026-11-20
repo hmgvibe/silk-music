@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import app.silk.data.Artist
 import app.silk.data.Song
 
 /**
@@ -23,7 +24,8 @@ object SongItems {
             putString("coverUrl", song.coverUrl)
             putLong("numericId", song.numericId)
             putInt("kind", song.kind)
-            putString("singerMid", song.singerMid)
+            putStringArrayList("singerMids", ArrayList(song.singers.map { it.mid }))
+            putStringArrayList("singerNames", ArrayList(song.singers.map { it.name }))
         }
         val metadata = MediaMetadata.Builder()
             .setTitle(song.title)
@@ -53,8 +55,14 @@ object SongItems {
             coverUrl = extras.getString("coverUrl"),
             numericId = extras.getLong("numericId"),
             kind = extras.getInt("kind"),
-            singerMid = extras.getString("singerMid"),
+            singers = singersOf(extras),
         )
+    }
+
+    private fun singersOf(extras: Bundle): List<Artist> {
+        val mids = extras.getStringArrayList("singerMids") ?: return emptyList()
+        val names = extras.getStringArrayList("singerNames").orEmpty()
+        return mids.mapIndexed { i, mid -> Artist(mid, names.getOrNull(i).orEmpty()) }
     }
 
     /** Items from a controller arrive without their URI; give it back. */

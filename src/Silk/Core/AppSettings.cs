@@ -25,6 +25,8 @@ public sealed class AppSettings
     public int LyricAlign { get; set; } = 1;
     public bool LyricBold { get; set; } = true;
     public bool LyricBlur { get; set; } = true;
+    /// <summary>Lyric shift in milliseconds for each output device (keyed by device id); positive shows lyrics earlier.</summary>
+    public Dictionary<string, int> LyricOffsets { get; set; } = [];
     public int Cover { get; set; } = 1;
     public int Wave { get; set; } = 1;
     public int WaveStyle { get; set; }
@@ -66,6 +68,7 @@ public sealed class AppSettings
         LyricAlign = Math.Clamp(LyricAlign, 0, 2);
         Cover = Math.Clamp(Cover, 0, 2);
         WaveStyle = Math.Clamp(WaveStyle, 0, 2);
+        LyricOffsets ??= [];
         return this;
     }
 

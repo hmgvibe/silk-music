@@ -10,11 +10,13 @@ data class Song(
     val coverUrl: String? = null,
     val numericId: Long = 0,
     val kind: Int = 0,
-    val singerMid: String? = null,
+    val singers: List<Artist> = emptyList(),
 ) {
     val cover: String
         get() = coverUrl ?: if (albumMid.isEmpty()) "" else albumCover(albumMid)
 }
+
+data class Artist(val mid: String, val name: String)
 
 enum class CollectionKind { Daily, Guess, Liked, Owned, Playlist, Album, Toplist, Singer }
 
@@ -61,6 +63,8 @@ interface MusicSource {
     suspend fun search(keyword: String): List<Song>
     suspend fun searchCollections(keyword: String, kind: CollectionKind): List<Collection>
     suspend fun searchSingers(keyword: String): List<Collection>
+    /** The page for one of a song's singers. */
+    fun singerPage(artist: Artist): Collection
     suspend fun stream(mid: String): String?
     suspend fun lyrics(mid: String): List<LyricEntry>
     suspend fun createQr(channel: String): QrTicket

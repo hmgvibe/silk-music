@@ -40,7 +40,9 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        // -Pabi=arm64-v8a builds a phone-only package, about half the size (x86_64 is for the emulator).
+        val abis = (findProperty("abi") as String?)?.split(',') ?: listOf("arm64-v8a", "x86_64")
+        ndk { abiFilters += abis }
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DNODE_DIR=$nodeDir", "-DANDROID_STL=c++_shared")

@@ -54,6 +54,19 @@ class Settings(private val prefs: android.content.SharedPreferences) {
         get() = prefs.getBoolean("lyricBlur", true)
         set(value) = prefs.edit().putBoolean("lyricBlur", value).apply()
 
+    init {
+        // An earlier build saved the shift per song; it now belongs to the output device.
+        val stale = prefs.all.keys.filter { it.startsWith("lyricOffset:") }
+        if (stale.isNotEmpty()) prefs.edit().apply { stale.forEach(::remove) }.apply()
+    }
+
+    /** Lyric shift in milliseconds for one output device; positive shows lyrics earlier. */
+    fun lyricOffset(device: String) = prefs.getInt("deviceOffset:$device", 0)
+
+    fun setLyricOffset(device: String, ms: Int) = prefs.edit().apply {
+        if (ms == 0) remove("deviceOffset:$device") else putInt("deviceOffset:$device", ms)
+    }.apply()
+
     var lyricBold: Boolean
         get() = prefs.getBoolean("lyricBold", true)
         set(value) = prefs.edit().putBoolean("lyricBold", value).apply()

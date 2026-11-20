@@ -32,7 +32,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -115,9 +117,15 @@ private fun CoverPage(vm: AppViewModel) {
             song?.title ?: "還沒有播放", color = silk.fg, fontSize = 21.sp, fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(4.dp))
-        Text(song?.artist.orEmpty(), color = silk.fg70, fontSize = 14.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(26.dp))
+        Spacer(Modifier.height(1.dp))
+        if (song != null) {
+            ArtistLink(song, vm::openSinger) {
+                Text(song.artist, color = silk.fg70, fontSize = 14.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        } else {
+            Spacer(Modifier.height(25.dp))
+        }
+        Spacer(Modifier.height(23.dp))
         ProgressBar(vm)
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -227,7 +235,10 @@ private fun LyricsPage(vm: AppViewModel, onOptions: () -> Unit) {
 @Composable
 private fun LyricOptions(vm: AppViewModel, onDismiss: () -> Unit) {
     val silk = LocalSilk.current
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = silk.sheet, contentColor = silk.fg) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, containerColor = silk.sheet, contentColor = silk.fg,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
         Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 36.dp)) {
             Text("歌詞設定", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = silk.fg)
             Spacer(Modifier.height(18.dp))
@@ -252,7 +263,60 @@ private fun LyricOptions(vm: AppViewModel, onDismiss: () -> Unit) {
                 Chip("遠處模糊", vm.lyricBlur) { vm.changeLyricBlur(!vm.lyricBlur) }
                 Chip("目前行加粗", vm.lyricBold) { vm.changeLyricBold(!vm.lyricBold) }
             }
+            Spacer(Modifier.height(18.dp))
+            LyricShift(vm)
         }
+    }
+}
+
+/** Nudges lyrics earlier or later, in tenths of a second, saved for the output device (Bluetooth adds delay). */
+@Composable
+private fun LyricShift(vm: AppViewModel) {
+    val silk = LocalSilk.current
+    val offset = vm.lyricOffset
+    LaunchedEffect(Unit) { vm.refreshOutput() }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("歌詞微調", color = silk.fg, fontSize = 15.sp)
+            Text("跟著輸出裝置記住 · 目前：${vm.outputDevice.label}", color = silk.fg45, fontSize = 12.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (offset != 0) {
+            Text(
+                "重設", color = silk.fg70, fontSize = 13.sp,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).pressable { vm.resetLyricShift() }.padding(8.dp, 4.dp),
+            )
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        StepButton("−0.5", "歌詞延後 0.5 秒") { vm.shiftLyrics(-500) }
+        StepButton("−0.1", "歌詞延後 0.1 秒") { vm.shiftLyrics(-100) }
+        val label = when {
+            offset > 0 -> "提前 %.1f 秒".format(offset / 1000f)
+            offset < 0 -> "延後 %.1f 秒".format(-offset / 1000f)
+            else -> "未調整"
+        }
+        Text(label, color = if (offset == 0) silk.fg45 else silk.fg, fontSize = 14.sp, textAlign = TextAlign.Center,
+            maxLines = 1, modifier = Modifier.weight(1f))
+        StepButton("+0.1", "歌詞提前 0.1 秒") { vm.shiftLyrics(100) }
+        StepButton("+0.5", "歌詞提前 0.5 秒") { vm.shiftLyrics(500) }
+    }
+}
+
+@Composable
+private fun StepButton(text: String, label: String, onClick: () -> Unit) {
+    val silk = LocalSilk.current
+    Box(
+        Modifier
+            .pressable(onClick)
+            .clip(RoundedCornerShape(20.dp))
+            .background(silk.fg07)
+            .border(1.dp, silk.fg12, RoundedCornerShape(20.dp))
+            .padding(horizontal = 12.dp, vertical = 9.dp)
+            .semantics { contentDescription = label },
+    ) {
+        Text(text, color = silk.fg, fontSize = 14.sp)
     }
 }
 

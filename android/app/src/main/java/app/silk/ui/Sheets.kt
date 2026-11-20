@@ -50,7 +50,7 @@ fun QueueSheet(vm: AppViewModel, onDismiss: () -> Unit) {
             if (vm.queue.size > 1) Chip("清空", false) { vm.clearQueue() }
         }
         Spacer(Modifier.height(8.dp))
-        LazyColumn(state = list, modifier = Modifier.heightIn(max = 520.dp), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 28.dp)) {
+        LazyColumn(state = list, modifier = Modifier.heightIn(max = 520.dp).edgeFade(list),contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 28.dp)) {
             itemsIndexed(vm.queue, key = { i, song -> "$i:${song.mid}" }) { index, song ->
                 val current = index == vm.queueIndex
                 Row(

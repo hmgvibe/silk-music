@@ -21,6 +21,9 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -66,7 +69,8 @@ private fun PageHeader(title: String, onBack: () -> Unit, trailing: @Composable 
 
 @Composable
 private fun SongList(vm: AppViewModel, songs: List<Song>, from: CollectionKind?, header: @Composable () -> Unit = {}) {
-    LazyColumn(contentPadding = PaddingValues(start = 10.dp, end = 10.dp, bottom = 24.dp)) {
+    val state = rememberLazyListState()
+    LazyColumn(state = state, modifier = Modifier.edgeFade(state), contentPadding = PaddingValues(start = 10.dp, end = 10.dp, bottom = 24.dp)) {
         item { header() }
         itemsIndexed(songs, key = { i, song -> "$i:${song.mid}" }) { index, song ->
             SongRow(
@@ -78,6 +82,7 @@ private fun SongList(vm: AppViewModel, songs: List<Song>, from: CollectionKind?,
                 onPlayNext = { vm.playNext(song) },
                 onAddToQueue = { vm.addToQueue(song) },
                 onLike = { vm.toggleLike(song) },
+                onSinger = vm::openSinger,
             )
         }
     }
@@ -92,7 +97,7 @@ fun SongsScreen(vm: AppViewModel, collection: Collection) {
         SongList(vm, state.songs, collection.kind) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 val cover = collection.cover.ifEmpty { state.songs.firstOrNull()?.cover.orEmpty() }
-                Cover(cover, Modifier.size(92.dp), RoundedCornerShape(20.dp))
+                Cover(cover, Modifier.size(92.dp), if (collection.kind == CollectionKind.Singer) CircleShape else RoundedCornerShape(20.dp))
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(collection.title, color = silk.fg, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
@@ -118,7 +123,10 @@ fun LibraryScreen(vm: AppViewModel) {
     val state = vm.library
     Column(Modifier.fillMaxSize()) {
         PageHeader("音樂庫", onBack = { vm.back() })
+        val grid = rememberLazyGridState()
         LazyVerticalGrid(
+            state = grid,
+            modifier = Modifier.edgeFade(grid),
             columns = GridCells.Adaptive(150.dp),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -136,6 +144,7 @@ fun SearchScreen(vm: AppViewModel) {
     val silk = LocalSilk.current
     val search = vm.search
     val focus = remember { FocusRequester() }
+    val grid = rememberLazyGridState()
     LaunchedEffect(Unit) { if (!search.searched) focus.requestFocus() }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -187,6 +196,8 @@ fun SearchScreen(vm: AppViewModel) {
             search.tab == 0 -> if (search.songs.isEmpty()) Message("沒有找到相關歌曲") else SongList(vm, search.songs, null)
             search.collections.isEmpty() -> Message("沒有找到相關結果")
             else -> LazyVerticalGrid(
+                state = grid,
+                modifier = Modifier.edgeFade(grid),
                 columns = GridCells.Adaptive(140.dp),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),

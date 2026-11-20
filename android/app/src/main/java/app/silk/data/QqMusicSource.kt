@@ -145,6 +145,8 @@ class QqMusicSource(private val bridge: Bridge) : MusicSource {
         }
     }
 
+    override fun singerPage(artist: Artist) = Collection(CollectionKind.Singer, artist.mid, artist.name, "歌手", singerCover(artist.mid))
+
     override suspend fun searchSingers(keyword: String): List<Collection> {
         val found = mutableListOf<Collection>()
         val seen = mutableSetOf<String>()
@@ -302,7 +304,10 @@ class QqMusicSource(private val bridge: Bridge) : MusicSource {
             seconds = int(item, "interval") ?: 0,
             numericId = long(item, "id", "songid") ?: 0,
             kind = int(item, "type", "songtype") ?: 0,
-            singerMid = singers.firstOrNull()?.let { str(it, "mid", "singermid") },
+            singers = singers.mapNotNull { singer ->
+                val singerMid = str(singer, "mid", "singermid") ?: return@mapNotNull null
+                Artist(singerMid, cleanText(str(singer, "title", "name") ?: ""))
+            },
         )
     }
 

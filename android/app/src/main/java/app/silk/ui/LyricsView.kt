@@ -87,12 +87,14 @@ fun LyricsView(vm: AppViewModel, modifier: Modifier = Modifier) {
         return
     }
 
-    val position = rememberPosition(vm)
+    val playback = rememberPosition(vm)
+    // The lyric clock: playback position plus this song's lyric shift.
+    val position = remember { derivedStateOf { playback.value + vm.lyricOffset } }
     val timed = lines.any { it.timed }
     val align = vm.lyricAlign
     val fontSize = vm.lyricSize
 
-    BoxWithConstraints(modifier.clipToBounds()) {
+    BoxWithConstraints(modifier.clipToBounds().fadeEdges({ 1f }, { 1f }, topSize = 56.dp, bottomSize = 72.dp)) {
         val density = LocalDensity.current
         val measurer = rememberTextMeasurer()
         val sidePx = with(density) { SIDE.toPx() }
@@ -196,7 +198,7 @@ fun LyricsView(vm: AppViewModel, modifier: Modifier = Modifier) {
                         position = position,
                         onSeek = {
                             scope.launch { manual.animateTo(0f, spring(dampingRatio = .9f, stiffness = 200f)) }
-                            vm.seekTo((line.time * 1000).toLong())
+                            vm.seekTo(((line.time * 1000).toLong() - vm.lyricOffset).coerceAtLeast(0))
                         },
                     )
                 }

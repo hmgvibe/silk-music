@@ -132,7 +132,7 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <ScrollViewer x:Name="SettingsPage" VerticalScrollBarVisibility="Auto" Focusable="False" Visibility="{Binding IsSettingsView, Converter={StaticResource Vis}}">
+                        <ScrollViewer x:Name="SettingsPage" ui:EdgeFade.IsEnabled="True" VerticalScrollBarVisibility="Auto" Focusable="False" Visibility="{Binding IsSettingsView, Converter={StaticResource Vis}}">
                             <StackPanel Margin="2,0,24,16">
                                 <StackPanel.Resources>
                                     <Style x:Key="Group" TargetType="TextBlock">
@@ -193,7 +193,7 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False" Visibility="{Binding IsGridView, Converter={StaticResource Vis}}">
+                        <ScrollViewer ui:EdgeFade.IsEnabled="True" VerticalScrollBarVisibility="Auto" Focusable="False" Visibility="{Binding IsGridView, Converter={StaticResource Vis}}">
                             <ItemsControl ItemsSource="{Binding Library}" ItemTemplate="{StaticResource GridCardTemplate}" Focusable="False" Margin="0,0,16,0">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
@@ -212,9 +212,9 @@
                                 <RadioButton Style="{StaticResource ChipButton}" GroupName="SearchTab" Tag="2" Content="歌單" Margin="0,0,8,0" Checked="OnSearchTabChecked" />
                             </WrapPanel>
                             <!-- Headers (singer, album or matching singers) and songs share one virtualized list. -->
-                            <ListBox x:Name="SongList" Grid.Row="1" Style="{StaticResource RowList}" ItemTemplateSelector="{StaticResource SongListTemplates}" Margin="-10,0,12,0"
+                            <ListBox x:Name="SongList" Grid.Row="1" ui:EdgeFade.IsEnabled="True" Style="{StaticResource RowList}" ItemTemplateSelector="{StaticResource SongListTemplates}" Margin="-10,0,12,0"
                                      Visibility="{Binding ShowSongList, Converter={StaticResource Vis}}" />
-                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" Visibility="{Binding ShowCollectionGrid, Converter={StaticResource Vis}}">
+                            <ScrollViewer Grid.Row="1" ui:EdgeFade.IsEnabled="True" VerticalScrollBarVisibility="Auto" Focusable="False" Visibility="{Binding ShowCollectionGrid, Converter={StaticResource Vis}}">
                                 <ItemsControl ItemsSource="{Binding SearchCollections}" ItemTemplate="{StaticResource GridCardTemplate}" Focusable="False" Margin="0,0,16,0">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
@@ -306,8 +306,10 @@
                 <Border x:Name="PlayerCover" Width="340" Height="340" CornerRadius="38" ui:Cover.Keep="True" ui:Cover.Url="{Binding CurrentCover}" />
                 <TextBlock Text="{Binding CurrentTitle}" FontSize="20" FontWeight="SemiBold" Margin="0,20,0,0" TextAlignment="Center" TextTrimming="CharacterEllipsis"
                            Width="{Binding ActualWidth, ElementName=PlayerCover}" />
-                <TextBlock Text="{Binding CurrentArtist}" FontSize="13" Margin="0,3,0,0" Foreground="{x:Static ui:Theme.Fg70}" TextAlignment="Center" TextTrimming="CharacterEllipsis"
-                           Width="{Binding ActualWidth, ElementName=PlayerCover}" />
+                <Button Style="{StaticResource PlainButton}" HorizontalAlignment="Center" Margin="0,1,0,0" Click="OnPlayerArtist" ToolTip="前往歌手"
+                        MaxWidth="{Binding ActualWidth, ElementName=PlayerCover}" AutomationProperties.Name="{Binding CurrentArtist, StringFormat='前往歌手：{0}'}">
+                    <TextBlock Text="{Binding CurrentArtist}" FontSize="13" Margin="10,2" Foreground="{x:Static ui:Theme.Fg70}" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </Button>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,18,0,0">
                     <ui:HeartButton Width="44" Height="44" FontSize="19" Margin="0,0,14,0" IsLiked="{Binding CurrentLiked}" Click="OnLikeCurrent" AutomationProperties.Name="{Binding LikeLabel}" />
                     <Button Style="{StaticResource RoundButton}" Tag="{StaticResource I.Prev}" Width="44" Height="44" Click="OnPrevious" AutomationProperties.Name="上一首" />
@@ -360,7 +362,7 @@
                         <TextBlock Text="播放器設定" FontSize="19" FontWeight="SemiBold" VerticalAlignment="Center" />
                         <Button Style="{StaticResource StrokeButton}" Tag="{StaticResource I.Close}" Width="34" Height="34" FontSize="11" HorizontalAlignment="Right" Click="OnPlayerOptionsClose" AutomationProperties.Name="關閉播放器設定" />
                     </Grid>
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False">
+                    <ScrollViewer Grid.Row="1" ui:EdgeFade.IsEnabled="True" VerticalScrollBarVisibility="Auto" Focusable="False">
                         <StackPanel x:Name="PlayerOptionsPanel" Margin="0,0,14,6">
                             <StackPanel.Resources>
                                 <Style x:Key="Head" TargetType="TextBlock"><Setter Property="FontSize" Value="13" /><Setter Property="Foreground" Value="{x:Static ui:Theme.Fg70}" /><Setter Property="Margin" Value="0,12,0,8" /></Style>
@@ -388,6 +390,28 @@
 
                             <TextBlock Text="效果" Style="{StaticResource Head}" />
                             <WrapPanel><CheckBox Tag="Blur" Content="遠處模糊" /></WrapPanel>
+
+                            <Grid Margin="0,12,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="歌詞微調" FontSize="13" Foreground="{x:Static ui:Theme.Fg70}" />
+                                    <TextBlock Text="{Binding OutputName}" FontSize="11.5" Margin="0,3,60,0" Foreground="{x:Static ui:Theme.Fg45}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Button Style="{StaticResource PillTextButton}" Content="重設" HorizontalAlignment="Right" VerticalAlignment="Center" Click="OnLyricShiftReset"
+                                        Visibility="{Binding HasLyricShift, Converter={StaticResource Vis}}" AutomationProperties.Name="重設歌詞微調" />
+                            </Grid>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.Resources>
+                                    <Style TargetType="Button" BasedOn="{StaticResource PillTextButton}"><Setter Property="FontFamily" Value="{StaticResource NumberFont}" /><EventSetter Event="Click" Handler="OnLyricShift" /></Style>
+                                </Grid.Resources>
+                                <Button Grid.Column="0" Content="−0.5" Tag="-500" Margin="0,0,6,0" AutomationProperties.Name="歌詞延後 0.5 秒" ToolTip="歌詞延後 0.5 秒" />
+                                <Button Grid.Column="1" Content="−0.1" Tag="-100" AutomationProperties.Name="歌詞延後 0.1 秒" ToolTip="歌詞延後 0.1 秒" />
+                                <TextBlock Grid.Column="2" Text="{Binding LyricShiftText}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Button Grid.Column="3" Content="+0.1" Tag="100" Margin="0,0,6,0" AutomationProperties.Name="歌詞提前 0.1 秒" ToolTip="歌詞提前 0.1 秒" />
+                                <Button Grid.Column="4" Content="+0.5" Tag="500" AutomationProperties.Name="歌詞提前 0.5 秒" ToolTip="歌詞提前 0.5 秒" />
+                            </Grid>
 
                             <TextBlock Text="封面大小" Style="{StaticResource Head}" />
                             <WrapPanel><RadioButton GroupName="CoverOption" Tag="Cover:0" Content="小" /><RadioButton GroupName="CoverOption" Tag="Cover:1" Content="標準" /><RadioButton GroupName="CoverOption" Tag="Cover:2" Content="大" /></WrapPanel>
@@ -425,7 +449,7 @@
                             <Button Style="{StaticResource StrokeButton}" Tag="{StaticResource I.Close}" Width="34" Height="34" FontSize="11" Click="OnQueueClose" AutomationProperties.Name="關閉播放清單" />
                         </StackPanel>
                     </Grid>
-                    <ListBox x:Name="QueueList" Grid.Row="1" Style="{StaticResource RowList}" ItemsSource="{Binding Queue}" ItemTemplate="{StaticResource QueueRowTemplate}"
+                    <ListBox x:Name="QueueList" Grid.Row="1" ui:EdgeFade.IsEnabled="True" Style="{StaticResource RowList}" ItemsSource="{Binding Queue}" ItemTemplate="{StaticResource QueueRowTemplate}"
                              AllowDrop="True" DragOver="OnQueueDragOver" Drop="OnQueueDrop" />
                 </Grid>
             </Border>

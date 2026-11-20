@@ -286,6 +286,8 @@ public sealed class AppModel : Observable, IDisposable
             Duration = d;
             DurationText = Song.Format(d);
         });
+        Audio.DeviceOpened += () => _ui.BeginInvoke(RefreshOutput);
+        RefreshOutput();
     }
 
     public Page Page
@@ -859,6 +861,52 @@ public sealed class AppModel : Observable, IDisposable
             _settings.LyricBold = true;
             _settings.LyricBlur = true;
         });
+    }
+
+    // ---------------------------------------------------------------- lyric shift, per output device
+
+    private OutputDevice _output = OutputDevice.Unknown;
+    private const int MaxLyricShift = 10_000;
+
+    /// <summary>The lyric shift in seconds for the device music plays on; positive shows lyrics earlier.</summary>
+    public double LyricOffset => LyricShiftMs / 1000d;
+    private int LyricShiftMs => _settings.LyricOffsets.GetValueOrDefault(_output.Id);
+    public string OutputName => $"跟著輸出裝置記住 · 目前：{_output.Name}";
+    public bool HasLyricShift => LyricShiftMs != 0;
+    public string LyricShiftText => LyricShiftMs switch
+    {
+        > 0 => $"提前 {LyricShiftMs / 1000d:0.0} 秒",
+        < 0 => $"延後 {-LyricShiftMs / 1000d:0.0} 秒",
+        _ => "未調整",
+    };
+
+    public void ShiftLyrics(int deltaMs) => SetLyricShift(Math.Clamp(LyricShiftMs + deltaMs, -MaxLyricShift, MaxLyricShift));
+
+    public void ResetLyricShift() => SetLyricShift(0);
+
+    /// <summary>Checks which device music plays on; a Bluetooth headset and the speakers keep separate shifts.</summary>
+    public void RefreshOutput()
+    {
+        var device = Audio.CurrentDevice();
+        if (device == _output) return;
+        _output = device;
+        RaiseLyricShift();
+        Raise(nameof(OutputName));
+    }
+
+    private void SetLyricShift(int ms)
+    {
+        if (ms == 0) _settings.LyricOffsets.Remove(_output.Id);
+        else _settings.LyricOffsets[_output.Id] = ms;
+        RaiseLyricShift();
+        QueueSave();
+    }
+
+    private void RaiseLyricShift()
+    {
+        Raise(nameof(LyricOffset));
+        Raise(nameof(LyricShiftText));
+        Raise(nameof(HasLyricShift));
     }
 
     private void ChangeLyric(Action apply)

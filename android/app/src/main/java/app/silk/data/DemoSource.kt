@@ -115,6 +115,11 @@ class DemoSource(context: Context) : MusicSource {
         }
     }
 
+    override fun singerPage(artist: Artist): Collection {
+        val album = albums.first { it.id == artist.mid }
+        return Collection(CollectionKind.Singer, album.id, album.artist, "4 首", coverOf(album))
+    }
+
     override suspend fun searchSingers(keyword: String): List<Collection> {
         delay(180)
         return albums.filter { it.artist.contains(keyword, true) }
@@ -146,7 +151,8 @@ class DemoSource(context: Context) : MusicSource {
     private fun tracksOf(album: Album): List<Song> {
         val suffix = listOf("", "（夜版）", "（現場）", "（鋼琴）")
         return (0 until 4).map { i ->
-            Song("${album.id}-$i", album.title + suffix[i], album.artist, album.title, album.id, 42, coverOf(album), singerMid = album.id)
+            Song("${album.id}-$i", album.title + suffix[i], album.artist, album.title, album.id, 42, coverOf(album),
+                singers = listOf(Artist(album.id, album.artist)))
         }
     }
 
