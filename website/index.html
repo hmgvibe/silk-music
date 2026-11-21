@@ -1,0 +1,1155 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>絲音 · 顏色跟著封面流動的音樂播放器</title>
+<meta name="description" content="絲音是給 Windows 與 Android 的音樂播放器：顏色取自正在播放的封面，歌詞一行一行地呼吸。登入自己的 QQ 音樂帳號即可使用。">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Live colours, rewritten every frame while the palette flows (see Theme in the script). */
+  --a: 46, 29, 64;
+  --b: 74, 44, 92;
+  --c: 233, 160, 170;
+  --fg: 255, 255, 255;
+  --panel: rgba(30, 19, 42, .42);
+  --sheet: rgb(28, 18, 40);
+  --ink-on-fg: 46, 29, 64;
+
+  --fg100: rgb(var(--fg));
+  --fg70: rgba(var(--fg), .7);
+  --fg45: rgba(var(--fg), .45);
+  --fg24: rgba(var(--fg), .24);
+  --fg12: rgba(var(--fg), .12);
+  --fg07: rgba(var(--fg), .07);
+
+  --radius: 30px;
+  --gutter: clamp(16px, 4vw, 56px);
+  --font: "Noto Sans TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+  --press: cubic-bezier(.34, 1.56, .64, 1);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: rgb(var(--a));
+  color: var(--fg100);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+img { display: block; max-width: 100%; }
+.nowrap { white-space: nowrap; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* The silk: one WebGL canvas behind the whole page, as in the app. */
+#silk { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; }
+
+/* ---------- controls: the app's control grammar ---------- */
+.icon { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.icon.solid { fill: currentColor; }
+.round {
+  --size: 48px;
+  width: var(--size); height: var(--size);
+  display: inline-grid; place-items: center;
+  border-radius: 50%;
+  border: 1.4px solid var(--fg45);
+  background: transparent;
+  font-size: calc(var(--size) * .4);
+  cursor: pointer;
+  transition: transform .32s var(--press), background-color .2s, border-color .2s;
+}
+.round:hover { background: var(--fg07); }
+.round:active { transform: scale(.92); transition-duration: .08s; }
+.plain {
+  width: 44px; height: 44px; display: inline-grid; place-items: center;
+  border: 0; background: none; border-radius: 50%; color: var(--fg70); font-size: 22px; cursor: pointer;
+  transition: transform .32s var(--press), color .2s;
+}
+.plain:hover { color: var(--fg100); }
+.plain:active { transform: scale(.9); transition-duration: .08s; }
+.pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  height: 52px; padding: 0 26px; border-radius: 26px;
+  font-size: 16px; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer;
+  border: 1.4px solid var(--fg24); background: var(--fg07);
+  transition: transform .32s var(--press), background-color .2s, border-color .2s;
+}
+.pill:hover { background: var(--fg12); border-color: var(--fg45); }
+.pill:active { transform: scale(.96); transition-duration: .08s; }
+.pill.solid { background: var(--fg100); color: rgb(var(--ink-on-fg)); border-color: transparent; font-weight: 700; }
+.pill.solid:hover { background: rgba(var(--fg), .88); }
+.pill .icon { font-size: 18px; }
+.chip {
+  height: 42px; padding: 0 18px; border-radius: 21px; border: 1px solid var(--fg12);
+  background: var(--fg07); font-size: 15px; cursor: pointer; white-space: nowrap;
+  transition: transform .32s var(--press), background-color .2s, border-color .2s;
+}
+.chip[aria-pressed="true"] { background: var(--fg24); border-color: var(--fg45); }
+.chip:active { transform: scale(.95); transition-duration: .08s; }
+:focus-visible { outline: 2px solid var(--fg100); outline-offset: 3px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--fg07);
+  border-radius: var(--radius);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+
+/* ---------- nav: sits on the player ---------- */
+.nav {
+  position: fixed; inset: 0 0 auto 0; z-index: 20;
+  display: flex; align-items: center; gap: 28px;
+  padding: 18px var(--gutter);
+  transition: background-color .3s, padding .3s;
+}
+.nav.scrolled { background: linear-gradient(rgba(var(--a), .86), rgba(var(--a), 0)); }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 700; font-size: 19px; letter-spacing: .04em; }
+.brand img { width: 38px; height: 38px; }
+.nav ul { display: flex; gap: 6px; margin: 0 0 0 auto; padding: 0; list-style: none; }
+.nav ul a { display: block; padding: 8px 14px; border-radius: 18px; text-decoration: none; color: var(--fg70); font-size: 15px; transition: color .2s, background-color .2s; }
+.nav ul a:hover { color: var(--fg100); background: var(--fg07); }
+.nav .pill { height: 42px; padding: 0 20px; font-size: 15px; }
+
+/* ---------- hero: the player itself ---------- */
+.hero {
+  position: relative;
+  min-height: max(100svh, 720px);
+  padding: 96px var(--gutter) 28px;
+  display: grid;
+  grid-template-columns: minmax(300px, 44fr) 56fr;
+  grid-template-rows: 1fr auto;
+  column-gap: clamp(24px, 4vw, 72px);
+}
+.deck { align-self: center; display: flex; flex-direction: column; align-items: center; padding-bottom: 12px; }
+.cover-frame { width: min(38vh, 380px, 34vw); aspect-ratio: 1; position: relative; }
+.cover {
+  position: absolute; inset: 0; border-radius: 38px; overflow: hidden;
+  transform: scale(var(--cover-scale, 1));
+  transition: transform .7s cubic-bezier(.22, 1, .36, 1);
+  box-shadow: 0 30px 60px -22px rgba(0, 0, 0, .42), 0 10px 26px -12px rgba(0, 0, 0, .22);
+}
+.cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity .6s, transform .9s cubic-bezier(.22, 1, .36, 1); }
+.cover img.leaving { opacity: 0; transform: scale(1.04); }
+.cover img.arriving { opacity: 0; transform: scale(.96); }
+.track { margin-top: 24px; text-align: center; max-width: 100%; }
+.track h1, .track .title { margin: 0; font-size: 22px; line-height: 1.35; font-weight: 700; }
+.track p { margin: 2px 0 0; color: var(--fg70); font-size: 15px; }
+.controls { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+.controls .round { --size: 50px; }
+.controls .round.big { --size: 64px; border-width: 1.6px; }
+.cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 30px; }
+
+.lyrics-stage { position: relative; align-self: stretch; min-height: 420px; }
+.lyrics {
+  position: absolute; inset: 0; overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 82%, transparent);
+  mask-image: linear-gradient(transparent, #000 14%, #000 82%, transparent);
+  --size: 38px;
+  --dim: .44;
+  --scale: 1.06;
+  cursor: default;
+}
+.lyrics .line {
+  position: absolute; left: 0; right: 0; top: 0;
+  padding: 0 28px;
+  will-change: transform;
+}
+.lyrics .txt {
+  display: block; width: 100%;
+  font-size: var(--size); line-height: 1.28; font-weight: 500;
+  opacity: var(--dim);
+  transform-origin: var(--pivot, 50%) 50%;
+  transition: opacity .42s, transform .42s cubic-bezier(.22, 1, .36, 1), filter .5s;
+  text-wrap: balance;
+}
+.lyrics[data-align="0"] .txt { text-align: left; --pivot: 0%; }
+.lyrics[data-align="1"] .txt { text-align: center; --pivot: 50%; }
+.lyrics[data-align="2"] .txt { text-align: right; --pivot: 100%; }
+.lyrics[data-bold="1"] .line.on .txt { font-weight: 700; }
+.lyrics .line.on .txt { opacity: 1; transform: scale(var(--scale)); }
+.lyrics .line.credit .txt { font-size: calc(var(--size) * .5); font-weight: 400; opacity: calc(var(--dim) * .84); }
+.lyrics .line.seek .txt { cursor: pointer; }
+.lyrics .line.seek .txt:hover { opacity: max(var(--dim), .7); }
+.lyrics .line.on.seek .txt:hover { opacity: 1; }
+.dots { display: flex; gap: calc(var(--size) * .2); height: calc(var(--size) * 1.1); align-items: center; justify-content: var(--dots, center); }
+.lyrics[data-align="0"] .dots { --dots: flex-start; }
+.lyrics[data-align="2"] .dots { --dots: flex-end; }
+.dots i { width: calc(var(--size) * .4); height: calc(var(--size) * .4); border-radius: 50%; background: var(--fg100); opacity: .28; transform: scale(var(--dot, 0)); transition: transform .3s; }
+
+.tray { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; align-items: end; gap: 28px; }
+.swatches { position: relative; display: flex; gap: 12px; align-items: center; }
+.swatches .label { font-size: 14px; color: var(--fg70); margin-right: 4px; white-space: nowrap; }
+.swatch {
+  width: 46px; height: 46px; padding: 0; border-radius: 14px; overflow: hidden; border: 0; cursor: pointer;
+  background: var(--fg12);
+  transition: transform .32s var(--press);
+}
+.swatch img { width: 100%; height: 100%; }
+.swatch:hover { transform: translateY(-3px); }
+.swatch:active { transform: scale(.92); transition-duration: .08s; }
+.ring {
+  position: absolute; top: 0; left: 0; width: 56px; height: 56px; border-radius: 18px;
+  border: 2px solid var(--fg100); pointer-events: none;
+  transition: transform .45s var(--press);
+}
+.wave-wrap { display: flex; align-items: flex-end; gap: 16px; min-width: 0; }
+.time { font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; padding-bottom: 4px; }
+.time span { color: var(--fg70); }
+#wave { flex: 1; min-width: 0; height: 64px; cursor: pointer; }
+
+/* ---------- sections ---------- */
+section { position: relative; padding: clamp(88px, 12vw, 160px) var(--gutter); }
+.head { max-width: 720px; margin: 0 auto 56px; text-align: center; }
+.head h2 { margin: 0; font-size: clamp(30px, 3.6vw, 46px); line-height: 1.25; font-weight: 700; letter-spacing: .01em; }
+.head p { margin: 18px auto 0; max-width: 34em; color: var(--fg70); font-size: 18px; }
+.kicker { display: inline-block; margin-bottom: 14px; font-size: 14px; letter-spacing: .2em; color: var(--fg45); }
+
+/* colour: a pinned stage where scrolling hands one cover to the next */
+#color { padding: 0; }
+.color-stage { position: relative; height: 100svh; min-height: 640px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 40px; padding: 0 var(--gutter); }
+.color-copy { max-width: 470px; justify-self: end; }
+.color-copy h2 { margin: 0; font-size: clamp(30px, 3.6vw, 46px); line-height: 1.25; }
+.color-copy p { margin: 20px 0 0; color: var(--fg70); font-size: 18px; }
+.color-art { justify-self: start; display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.reel { position: relative; width: min(40vh, 380px, 38vw); aspect-ratio: 1; }
+.reel figure { position: absolute; inset: 0; margin: 0; border-radius: 38px; overflow: hidden; box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .45); will-change: transform, opacity; }
+.reel figure img { width: 100%; height: 100%; }
+.reel figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 22px 16px; background: linear-gradient(transparent, rgba(0, 0, 0, .42)); color: #fff; font-size: 15px; }
+.chips { display: flex; gap: 26px; }
+.chips div { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 13px; }
+.chips i { width: 58px; height: 58px; border-radius: 50%; border: 1.4px solid var(--fg24); }
+.chips b { font-weight: 500; }
+.chips span { color: var(--fg45); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+
+/* lyrics: a live panel with the app's own options */
+.lyric-panel { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 1.35fr 1fr; overflow: hidden; }
+.lyric-panel .lyrics-stage { min-height: 480px; border-right: 1px solid var(--fg07); }
+.lyric-panel .lyrics { --size: 30px; }
+.options { padding: 40px 40px 36px; display: flex; flex-direction: column; gap: 28px; }
+.options h3 { margin: 0 0 12px; font-size: 15px; font-weight: 500; color: var(--fg70); }
+.options .row { display: flex; flex-wrap: wrap; gap: 10px; }
+.shift { display: flex; align-items: center; gap: 8px; }
+.shift output { flex: 1; text-align: center; font-variant-numeric: tabular-nums; font-size: 16px; min-width: 6.5em; }
+.shift .chip { padding: 0 14px; font-variant-numeric: tabular-nums; }
+.options .note { margin: 10px 0 0; font-size: 14px; color: var(--fg45); line-height: 1.6; }
+
+/* devices */
+.devices { max-width: 1180px; margin: 0 auto; }
+.window { position: relative; margin: 0 9% 0 0; padding-bottom: 15%; }
+.window img { border-radius: 14px; box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .6), 0 0 0 1px var(--fg12); }
+.window .second { position: absolute; width: 52%; right: -11%; bottom: 0; }
+.phones { margin-top: clamp(56px, 7vw, 96px); display: grid; grid-template-columns: 1fr 1fr 2.22fr; gap: clamp(16px, 2.4vw, 32px); align-items: end; }
+.phone { margin: 0; }
+.phone img { border-radius: 30px; border: 6px solid rgba(0, 0, 0, .55); box-shadow: 0 30px 70px -26px rgba(0, 0, 0, .65), 0 0 0 1px var(--fg12); background: #000; }
+.phone.tall { transform: translateY(-28px); }
+.phone.wide img { border-radius: 26px; }
+.platform-notes { max-width: 1240px; margin: 72px auto 0; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.platform-notes div { padding: 4px 0 0; border-top: 1px solid var(--fg12); }
+.platform-notes h3 { margin: 18px 0 6px; font-size: 19px; }
+.platform-notes p { margin: 0; color: var(--fg70); }
+
+/* details */
+.details { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; column-gap: 64px; list-style: none; padding: 0; }
+.details li { display: grid; grid-template-columns: 44px 1fr; gap: 18px; padding: 26px 0; border-top: 1px solid var(--fg12); }
+.details .glyph { width: 44px; height: 44px; border-radius: 50%; border: 1.4px solid var(--fg24); display: grid; place-items: center; font-size: 20px; }
+.details h3 { margin: 6px 0 4px; font-size: 19px; line-height: 1.4; }
+.details p { margin: 0; color: var(--fg70); font-size: 16px; }
+.tag { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--fg45); border: 1px solid var(--fg24); border-radius: 10px; padding: 1px 8px; vertical-align: 3px; white-space: nowrap; }
+
+/* download */
+.downloads { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.dl { padding: 40px; display: flex; flex-direction: column; gap: 6px; }
+.dl h3 { margin: 0; font-size: 26px; }
+.dl .req { margin: 4px 0 0; color: var(--fg70); }
+.dl ul { margin: 18px 0 30px; padding: 0; list-style: none; color: var(--fg70); font-size: 16px; }
+.dl li { padding: 6px 0 6px 22px; position: relative; }
+.dl li::before { content: ""; position: absolute; left: 4px; top: 17px; width: 6px; height: 6px; border-radius: 50%; background: var(--fg45); }
+.dl .pill { margin-top: auto; align-self: flex-start; }
+.account { max-width: 1080px; margin: 32px auto 0; display: flex; gap: 16px; align-items: flex-start; color: var(--fg70); font-size: 16px; }
+.account .icon { font-size: 22px; margin-top: 3px; color: var(--fg45); }
+
+footer { padding: 48px var(--gutter) 56px; border-top: 1px solid var(--fg07); display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: center; color: var(--fg45); font-size: 14px; }
+footer .brand { font-size: 16px; color: var(--fg70); }
+footer .brand img { width: 28px; height: 28px; }
+footer p { margin: 0; flex: 1 1 360px; }
+footer a { color: var(--fg70); }
+
+/* ---------- narrower screens ---------- */
+@media (max-width: 1080px) {
+  .nav ul { display: none; }
+  .nav .pill { margin-left: auto; }
+  .lyric-panel { grid-template-columns: 1fr; }
+  .lyric-panel .lyrics-stage { border-right: 0; border-bottom: 1px solid var(--fg07); min-height: 400px; }
+  .window { margin-right: 6%; }
+  .window .second { right: -6%; }
+  .phones { grid-template-columns: 1fr 1fr; max-width: 620px; margin-left: auto; margin-right: auto; }
+  .phone.wide { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  .nav { padding: 12px 16px; }
+  .brand img { width: 32px; height: 32px; }
+  .hero { display: flex; flex-direction: column; padding: 84px 16px 20px; min-height: auto; }
+  .cover-frame { width: min(68vw, 300px); }
+  .track h1, .track .title { font-size: 20px; }
+  .lyrics-stage.hero-lyrics { order: 2; min-height: 190px; margin: 18px -16px 0; }
+  .hero-lyrics .lyrics { --size: 24px; }
+  .deck { display: contents; }
+  .deck > * { align-self: center; }
+  .controls { order: 3; margin-top: 8px; }
+  .cta { order: 4; margin-top: 22px; width: 100%; }
+  .cta { flex-wrap: nowrap; }
+  .cta .pill { flex: 1 1 auto; padding: 0 18px; }
+  .tray { order: 5; grid-template-columns: 1fr; gap: 18px; margin-top: 30px; }
+  .swatches { justify-content: center; flex-wrap: wrap; }
+  .swatches .label { width: 100%; text-align: center; margin: 0; }
+  #wave { height: 52px; }
+  .color-stage { grid-template-columns: 1fr; align-content: center; gap: 30px; text-align: center; min-height: 0; }
+  .color-copy { justify-self: center; }
+  .color-copy p { font-size: 16px; }
+  .color-art { justify-self: center; gap: 22px; }
+  .reel { width: min(62vw, 270px); }
+  .chips { gap: 18px; }
+  .chips i { width: 46px; height: 46px; }
+  .head p { font-size: 16px; }
+  .options { padding: 28px 22px; }
+  .shift .chip { padding: 0 10px; }
+  .shift output { min-width: 5.5em; font-size: 15px; }
+  .window { margin-right: 0; padding-bottom: 0; }
+  .window .second { position: relative; width: 82%; right: auto; bottom: auto; margin: -14% 0 0 auto; }
+  .platform-notes, .details, .downloads { grid-template-columns: 1fr; }
+  .platform-notes { margin-top: 48px; }
+  .dl { padding: 28px 24px; }
+  .dl .pill { align-self: stretch; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<canvas id="silk" aria-hidden="true"></canvas>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- The app's own 24×24 line icons (SilkIcons / App.xaml). -->
+  <symbol id="i-play" viewBox="0 0 24 24"><path class="fillme" d="M8 5.2 V18.8 L19 12 Z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5 V19 M16 5 V19" stroke-width="2.4"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18.5 6 V18 L9 12 Z M5.5 6 V18"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5.5 6 V18 L15 12 Z M18.5 6 V18"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20 C12 20 4.5 15.4 3 10.8 C2 7.4 4.2 5 7 5 C9 5 10.6 6 12 8 C13.4 6 15 5 17 5 C19.8 5 22 7.4 21 10.8 C19.5 15.4 12 20 12 20 Z"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M17 3 L21 7 L17 11 M3 11 V9.5 A2.5 2.5 0 0 1 5.5 7 H21 M7 21 L3 17 L7 13 M21 13 V14.5 A2.5 2.5 0 0 1 18.5 17 H3"/></symbol>
+  <symbol id="i-repeat-one" viewBox="0 0 24 24"><path d="M17 3 L21 7 L17 11 M3 11 V9.5 A2.5 2.5 0 0 1 5.5 7 H21 M7 21 L3 17 L7 13 M21 13 V14.5 A2.5 2.5 0 0 1 18.5 17 H3 M11 11 L12.5 10 V14"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 3 H21 V8 M3 20 L21 3 M21 16 V21 H16 M15 15 L21 21 M3 4 L9 10"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4 V15 M7 10.5 L12 15.5 L17 10.5 M5 19.5 H19"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7 H13 M17 7 H20 M13 5 H17 V9 H13 Z M4 17 H7 M11 17 H20 M7 15 H11 V19 H7 Z"/></symbol>
+  <symbol id="i-landscape" viewBox="0 0 24 24"><path d="M3 8.5 A1.5 1.5 0 0 1 4.5 7 H19.5 A1.5 1.5 0 0 1 21 8.5 V15.5 A1.5 1.5 0 0 1 19.5 17 H4.5 A1.5 1.5 0 0 1 3 15.5 Z M17.6 10.5 V13.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M12 4 A4 4 0 1 0 12 12 A4 4 0 1 0 12 4 Z M4.5 20 C5.5 16.5 8.4 15 12 15 C15.6 15 18.5 16.5 19.5 20"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><path d="M4 4 H10 V10 H4 Z M14 4 H20 V10 H14 Z M4 14 H10 V20 H4 Z M14 14 H16 M20 14 V16 M14 18 V20 H17 M19 18 H20 V20"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 14 C5 14 5.5 9 7.5 9 C9.5 9 9.5 16 12 16 C14.5 16 14.5 6 17 6 C19 6 19.5 12 21 12"/></symbol>
+  <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5.5 6 V18 L15 12 Z M18.5 6 V18"/></symbol>
+  <symbol id="i-disc" viewBox="0 0 24 24"><path d="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 Z M12 9.5 A2.5 2.5 0 1 0 12 14.5 A2.5 2.5 0 1 0 12 9.5 Z"/></symbol>
+  <symbol id="i-tray" viewBox="0 0 24 24"><path d="M4 14 H8 L9.5 16.5 H14.5 L16 14 H20 M4 14 V19 H20 V14 M6.5 5 H17.5 L20 14 M6.5 5 L4 14"/></symbol>
+  <symbol id="i-singer" viewBox="0 0 24 24"><path d="M12 4 A4 4 0 1 0 12 12 A4 4 0 1 0 12 4 Z M4.5 20 C5.5 16.5 8.4 15 12 15 C13.3 15 14.5 15.2 15.5 15.6 M17 21 V14.5 L20.5 13.5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><path d="M15 9 A5 5 0 1 0 15 9.01 M3 21 L10.5 13.5 M6 18 L8 20 M8 16 L9.5 17.5"/></symbol>
+</svg>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#top"><img src="assets/silk-icon.png" alt="">絲音</a>
+  <ul>
+    <li><a href="#color">取色</a></li>
+    <li><a href="#lyrics">歌詞</a></li>
+    <li><a href="#devices">兩端</a></li>
+    <li><a href="#details">細節</a></li>
+  </ul>
+  <a class="pill solid" href="#download"><svg class="icon"><use href="#i-download"/></svg>下載</a>
+</header>
+
+<main id="top">
+  <!-- The first screen is the player itself: cover, lyrics, waveform. The lyric lines carry the pitch. -->
+  <section class="hero" aria-label="絲音播放器">
+    <div class="deck">
+      <div class="cover-frame"><div class="cover" id="cover"></div></div>
+      <div class="track">
+        <h1 class="title" id="title">絲音</h1>
+        <p id="artist">給 Windows 與 Android 的音樂播放器</p>
+      </div>
+      <div class="controls">
+        <button class="plain" id="like" aria-label="收藏" aria-pressed="false"><svg class="icon"><use href="#i-heart"/></svg></button>
+        <button class="round" id="prev" aria-label="上一首"><svg class="icon solid"><use href="#i-prev"/></svg></button>
+        <button class="round big" id="toggle" aria-label="暫停"><svg class="icon"><use href="#i-pause"/></svg></button>
+        <button class="round" id="next" aria-label="下一首"><svg class="icon solid"><use href="#i-next"/></svg></button>
+        <button class="plain" id="mode" aria-label="清單循環"><svg class="icon"><use href="#i-repeat"/></svg></button>
+      </div>
+      <div class="cta">
+        <a class="pill solid" href="https://github.com/hmgvibe/silk-music/releases/latest"><svg class="icon"><use href="#i-download"/></svg>下載 Windows 版</a>
+        <a class="pill" href="https://github.com/hmgvibe/silk-music/releases/latest">Android 版</a>
+      </div>
+    </div>
+
+    <div class="lyrics-stage hero-lyrics">
+      <div class="lyrics" id="heroLyrics" data-align="1" data-bold="1" role="list" aria-label="歌詞"></div>
+    </div>
+
+    <div class="tray">
+      <div class="swatches" id="swatches" role="radiogroup" aria-label="換一張封面">
+        <span class="label">換一張封面</span>
+        <span class="ring" id="ring" aria-hidden="true"></span>
+      </div>
+      <div class="wave-wrap">
+        <canvas id="wave" role="slider" aria-label="播放進度" tabindex="0"></canvas>
+        <div class="time"><b id="pos">0:00</b><span> / 0:42</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scroll-driven: the cover hands over to the next one and the whole page takes its colours. -->
+  <section id="color">
+    <div class="color-stage" id="colorStage">
+      <div class="color-copy">
+        <span class="kicker">取色</span>
+        <h2>封面是什麼顏色，<br>絲音就是什麼顏色</h2>
+        <p>每換一首歌，絲音從封面取出深底、第二色調和光澤三種顏色，鋪成整個視窗流動的絲綢。遇到淺色封面，文字會換成深色，照樣看得清楚。</p>
+      </div>
+      <div class="color-art">
+        <div class="reel" id="reel"></div>
+        <div class="chips" id="chips">
+          <div><i data-k="a"></i><b>深底</b><span>#000000</span></div>
+          <div><i data-k="b"></i><b>第二色調</b><span>#000000</span></div>
+          <div><i data-k="c"></i><b>光澤</b><span>#000000</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="lyrics">
+    <div class="head reveal">
+      <span class="kicker">歌詞</span>
+      <h2>歌詞一行一行地呼吸</h2>
+      <p>唱到哪一行，哪一行就亮起來，下面的行像被輕輕拉著跟上，離得遠的字慢慢模糊。點一行，就跳到那裡。</p>
+    </div>
+    <div class="panel lyric-panel reveal-panel">
+      <div class="lyrics-stage">
+        <div class="lyrics" id="panelLyrics" data-align="1" data-bold="1" role="list" aria-label="歌詞"></div>
+      </div>
+      <div class="options">
+        <div>
+          <h3>對齊方式</h3>
+          <div class="row" data-group="align">
+            <button class="chip" data-v="0" aria-pressed="false">靠左</button>
+            <button class="chip" data-v="1" aria-pressed="true">置中</button>
+            <button class="chip" data-v="2" aria-pressed="false">靠右</button>
+          </div>
+        </div>
+        <div>
+          <h3>效果</h3>
+          <div class="row">
+            <button class="chip" id="optBlur" aria-pressed="true">遠處模糊</button>
+            <button class="chip" id="optBold" aria-pressed="true">目前行加粗</button>
+          </div>
+        </div>
+        <div>
+          <h3>歌詞微調</h3>
+          <div class="shift">
+            <button class="chip" data-shift="-500" aria-label="歌詞延後 0.5 秒">−0.5</button>
+            <button class="chip" data-shift="-100" aria-label="歌詞延後 0.1 秒">−0.1</button>
+            <output id="shiftOut" aria-live="polite">未調整</output>
+            <button class="chip" data-shift="100" aria-label="歌詞提前 0.1 秒">+0.1</button>
+            <button class="chip" data-shift="500" aria-label="歌詞提前 0.5 秒">+0.5</button>
+          </div>
+          <p class="note">藍牙耳機會慢半拍。每個輸出裝置各記一份微調，換回喇叭就自動用回原來的值。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="devices">
+    <div class="head reveal">
+      <span class="kicker">兩端</span>
+      <h2>Windows 與 Android，<span class="nowrap">同一種顏色</span></h2>
+      <p>電腦上是寬敞的視窗和畫出整首歌響度的波形；手機上是浮在底部的播放膠囊，橫過來就能邊看封面邊看歌詞。</p>
+    </div>
+    <div class="devices">
+      <figure class="window reveal-drop" style="margin:0">
+        <img src="assets/windows-home.webp" alt="絲音 Windows 版主頁：側欄、封面捲軸、今日推薦和底部播放膠囊" width="1436" height="922" loading="lazy">
+        <img class="second" src="assets/windows-player.webp" alt="絲音 Windows 版播放器：大封面、歌詞和波形進度條" width="1436" height="922" loading="lazy">
+      </figure>
+      <div class="phones">
+        <figure class="phone reveal-drop"><img src="assets/android-home.webp" alt="絲音 Android 版主頁" width="540" height="1200" loading="lazy"></figure>
+        <figure class="phone tall reveal-drop"><img src="assets/android-player.webp" alt="絲音 Android 版播放器" width="540" height="1200" loading="lazy"></figure>
+        <figure class="phone wide reveal-drop"><img src="assets/android-landscape.webp" alt="絲音 Android 版橫屏播放器：左邊封面與控制，右邊歌詞" width="1200" height="540" loading="lazy"></figure>
+      </div>
+    </div>
+    <div class="platform-notes">
+      <div class="reveal-row"><h3>Windows</h3><p>播放器、設定和播放清單都在一個視窗裡。關掉視窗後留在系統匣繼續播放，工作列和鍵盤上的媒體鍵都能控制。</p></div>
+      <div class="reveal-row"><h3>Android</h3><p>主頁四顆按鈕直達搜尋、音樂庫、喜歡和設定。播放時通知欄和鎖屏都有控制，橫屏模式隱藏狀態列，讓歌詞佔滿整個高度。</p></div>
+    </div>
+  </section>
+
+  <section id="details">
+    <div class="head reveal">
+      <span class="kicker">細節</span>
+      <h2>那些細小的地方</h2>
+    </div>
+    <ul class="details">
+      <li class="reveal-row"><span class="glyph"><svg class="icon"><use href="#i-sliders"/></svg></span><div><h3>藍牙延遲微調</h3><p>歌詞以 0.1 秒為單位提前或延後，每副耳機、每個喇叭各記一份。</p></div></li>
+      <li class="reveal-row"><span class="glyph"><svg class="icon"><use href="#i-qr"/></svg></span><div><h3>掃碼登入</h3><p>用 QQ、微信或 QQ 音樂 App 掃一下就登入。手機上可以先把登入碼存進相簿再識別。</p></div></li>
+      <li class="reveal-row"><span class="glyph"><svg class="icon"><use href="#i-wave"/></svg></span><div><h3>波形進度條<span class="tag">Windows</span></h3><p>進度條畫的是整首歌的響度，副歌在哪裡一眼就看得到，可以有波紋、條形和普通三種樣子。</p></div></li>
+      <li class="reveal-row"><span class="glyph"><svg class="icon"><use href="#i-landscape"/></svg></span><div><h3>橫屏播放器<span class="tag">Android</span></h3><p>左邊封面和控制，右邊歌詞。豎屏和橫屏的字體大小、對齊方式各記一份。</p></div></li>
+      <li class="reveal-row"><span class="glyph"><svg class="icon"><use href="#i-singer"/></svg></span><div><h3>點歌手名，去歌手頁</h3><p>播放器裡的歌手名可以點；合唱的歌會先讓你選是哪一位。</p></div></li>
+      <li class="reveal-row"><span class="glyph"><svg class="icon solid"><use href="#i-skip"/></svg></span><div><h3>放不了的歌自動跳過</h3><p>遇到帳號沒有權限的歌，安靜地跳到下一首，不卡住，也不會有雜音。</p></div></li>
+      <li class="reveal-row"><span class="glyph"><svg class="icon"><use href="#i-disc"/></svg></span><div><h3>音質自己選</h3><p>最高可用、320K 或 128K。拿不到你選的音質時，自動退回較低的一檔。</p></div></li>
+      <li class="reveal-row"><span class="glyph"><svg class="icon"><use href="#i-tray"/></svg></span><div><h3>首頁想看什麼自己定</h3><p>推薦、歌單、新碟這些區塊可以分別開關；絲綢光效和面板質感也能調。</p></div></li>
+    </ul>
+  </section>
+
+  <section id="download">
+    <div class="head reveal">
+      <span class="kicker">下載</span>
+      <h2>下載絲音</h2>
+    </div>
+    <div class="downloads">
+      <div class="panel dl reveal-panel">
+        <h3>Windows</h3>
+        <p class="req">Windows 10 或 11，64 位元</p>
+        <ul>
+          <li>需要先安裝 .NET 9 桌面執行環境</li>
+          <li>解壓後打開 Silk.exe，不用安裝</li>
+        </ul>
+        <a class="pill solid" href="https://github.com/hmgvibe/silk-music/releases/latest"><svg class="icon"><use href="#i-download"/></svg>下載 Windows 版</a>
+      </div>
+      <div class="panel dl reveal-panel">
+        <h3>Android</h3>
+        <p class="req">Android 10 以上，64 位元手機</p>
+        <ul>
+          <li>安裝時允許「安裝未知來源的應用」</li>
+          <li>第一次打開會準備音樂服務，稍等幾秒</li>
+        </ul>
+        <a class="pill solid" href="https://github.com/hmgvibe/silk-music/releases/latest"><svg class="icon"><use href="#i-download"/></svg>下載 Android 版</a>
+      </div>
+    </div>
+    <p class="account reveal"><svg class="icon"><use href="#i-key"/></svg><span>絲音本身不提供歌曲。登入你自己的 QQ 音樂帳號後才能聽歌，能播放的歌曲和音質以帳號的權限為準。</span></p>
+  </section>
+</main>
+
+<footer>
+  <span class="brand"><img src="assets/silk-icon.png" alt="">絲音</span>
+  <p>絲音是個人製作的第三方播放器，與騰訊及 QQ 音樂沒有任何關聯。</p>
+  <a href="https://github.com/hmgvibe/silk-music">GitHub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+<script>
+(() => {
+'use strict';
+
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (s, r = document) => r.querySelector(s);
+
+/* ------------------------------------------------------------------ albums
+   The app's demo mode: five original albums with drawn covers and original lyrics,
+   plus 絲音's own "track", whose cover is the app icon and whose lyrics say what it is. */
+const DURATION = 42;
+const ALBUMS = [
+  { id: 'silk', title: '絲音', artist: '給 Windows 與 Android 的音樂播放器', icon: true,
+    credits: ['作詞：絲音', '作曲：你的歌單'],
+    lines: ['音樂有了顏色', '顏色來自正在播放的封面', '歌詞一行一行地呼吸', '遠處的字輕輕模糊', '藍牙慢了半拍也沒關係', '把手機橫過來看歌詞', 'Windows 與 Android', '都安安靜靜地播放'] },
+  { id: 'tide', title: '潮間帶', artist: '林間信號', back: [9, 34, 66], mid: [16, 92, 118], light: [126, 214, 214],
+    lines: ['退潮的時候', '腳印先學會了離開', '風把鹽留在袖口', '我把名字留給海', '燈塔還亮著', '像沒說完的一句話', '等下一次漲潮', '再替我說出來'] },
+  { id: 'noon', title: '赤色午後', artist: '夏日電台', back: [88, 16, 24], mid: [172, 44, 38], light: [255, 168, 108],
+    lines: ['柏油路在發燙', '收音機唱到一半', '你笑著闖紅燈', '整條街都變慢', '汽水冒著氣泡，像整個夏天都在輕輕地笑', '夏天沒有答案', '我們往西邊走', '追一個黃昏'] },
+  { id: 'mist', title: '晨霧', artist: '小島日記', back: [226, 213, 194], mid: [192, 205, 204], light: [255, 251, 240],
+    lines: ['窗外還沒有醒', '霧替山收好輪廓', '水壺輕輕地響', '日子重新開始', '你留下的杯子', '還有一點溫熱', '今天不必趕路', '慢慢走就好'] },
+  { id: 'night', title: '夜行列車', artist: '月台樂隊', back: [16, 42, 38], mid: [28, 110, 88], light: [210, 226, 140],
+    lines: ['末班車進站了', '窗上有城市的影子', '我數著隧道的燈', '數到你的名字', '下一站還很遠', '耳機裡下著雨', '如果天亮以前', '能夠到達這裡'] },
+  { id: 'violet', title: '紫色回音', artist: '第七個房間', back: [52, 34, 92], mid: [122, 76, 170], light: [240, 180, 214],
+    lines: ['走廊盡頭有光', '門縫裡傳來鋼琴', '我喊了一聲', '回音比我更輕', '牆上的時鐘', '忘記往前走', '這一晚這麼長', '夠我慢慢地懂'] },
+];
+
+/* The same drawing as DemoSource.coverOf: a field, a large disc, a small sun and a wave. */
+function drawCover(album, seed, size = 720) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const g = cv.getContext('2d');
+  const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  g.fillStyle = rgb(album.back); g.fillRect(0, 0, size, size);
+  const cx = size * (.3 + seed * .08), cy = size * (.62 - seed * .05);
+  g.fillStyle = rgb(album.mid); g.beginPath(); g.arc(cx, cy, size * .46, 0, Math.PI * 2); g.fill();
+  g.fillStyle = rgb(album.light); g.beginPath(); g.arc(cx + size * .34, cy - size * .34, size * .17, 0, Math.PI * 2); g.fill();
+  const k = size / 720, y = size * (.78 - seed * .03);
+  g.fillStyle = rgb(album.back, 190 / 255);
+  g.beginPath(); g.moveTo(0, y);
+  g.bezierCurveTo(size * .25, y - 130 * k, size * .42, y + 90 * k, size * .6, y);
+  g.bezierCurveTo(size * .75, y - 70 * k, size * .9, y - 60 * k, size, y - 20 * k);
+  g.lineTo(size, size); g.lineTo(0, size); g.closePath(); g.fill();
+  return cv;
+}
+
+/* ------------------------------------------------------------------ palette
+   CoverPalette.from, the rule both apps use: hue buckets weighted by saturation and mid lightness. */
+function hsl(h, s, l) {
+  h = ((h % 360) + 360) % 360; s = Math.min(1, Math.max(0, s)); l = Math.min(1, Math.max(0, l));
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+function toHsl(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (d < 1e-6) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+function paletteFrom(source) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 32;
+  const g = cv.getContext('2d', { willReadFrequently: true });
+  g.drawImage(source, 0, 0, 32, 32);
+  const px = g.getImageData(0, 0, 32, 32).data;
+  const buckets = 24, weight = new Float64Array(buckets), sat = new Float64Array(buckets);
+  let lightSum = 0, satSum = 0, count = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 128) continue;        // the icon's transparent corners are not part of the cover
+    const [h, s, l] = toHsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
+    lightSum += l; satSum += s; count++;
+    const bucket = Math.floor(h / 360 * buckets) % buckets;
+    const w = s * (1 - Math.abs(2 * l - 1)) + .002;
+    weight[bucket] += w; sat[bucket] += s * w;
+  }
+  let first = 0; for (let i = 1; i < buckets; i++) if (weight[i] > weight[first]) first = i;
+  let second = -1;
+  for (let i = 0; i < buckets; i++) {
+    const gap = Math.abs(i - first);
+    if (Math.min(gap, buckets - gap) < 3) continue;
+    if (second < 0 || weight[i] > weight[second]) second = i;
+  }
+  const hue = (first + .5) * 360 / buckets;
+  const hasSecond = second >= 0 && weight[second] > weight[first] * .16;
+  const hue2 = hasSecond ? (second + .5) * 360 / buckets : hue + 26;
+  let s = sat[first] / weight[first];
+  if (satSum / count < .07) s = .08;
+  if (lightSum / count > .72) {
+    return { a: hsl(hue, Math.min(s, .28), .87), b: hsl(hue2, Math.min(s, .2), .79), c: hsl(hue, Math.min(s, .34), .97), light: 1 };
+  }
+  const s1 = s <= .08 ? .08 : Math.min(.56, Math.max(.3, s * .8));
+  return { a: hsl(hue, s1, .15), b: hsl(hue2, s1 * .88, .26), c: hsl(hue2, Math.min(s1 + .08, .62), .66), light: 0 };
+}
+const hex = c => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase();
+
+/* ------------------------------------------------------------------ theme
+   Every colour eases toward the target palette, like the app's 900 ms colour flow. */
+const WHITE = [255, 255, 255], INK = [38, 31, 26];
+const mix = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
+const Theme = {
+  cur: null, target: null,
+  set(p, instant) { this.target = p; if (!this.cur || instant) this.cur = { a: [...p.a], b: [...p.b], c: [...p.c], light: p.light }; },
+  step(dt) {
+    const k = 1 - Math.exp(-dt / .28);
+    const c = this.cur, t = this.target;
+    c.a = mix(c.a, t.a, k); c.b = mix(c.b, t.b, k); c.c = mix(c.c, t.c, k); c.light += (t.light - c.light) * k;
+    this.paint();
+  },
+  paint() {
+    const c = this.cur, s = document.documentElement.style;
+    const lightness = Math.min(1, Math.max(0, (c.light - .35) / .3));
+    const fg = mix(WHITE, INK, lightness);
+    const panel = mix(mix(c.a, [0, 0, 0], .25), [255, 255, 255], c.light);
+    const sheet = mix(mix(c.a, [0, 0, 0], .35), mix(c.c, [255, 255, 255], .4), c.light);
+    const triple = v => v.map(Math.round).join(', ');
+    s.setProperty('--a', triple(c.a)); s.setProperty('--b', triple(c.b)); s.setProperty('--c', triple(c.c));
+    s.setProperty('--fg', triple(fg));
+    s.setProperty('--ink-on-fg', triple(c.light > .5 ? WHITE : mix(c.a, [0, 0, 0], .1)));
+    s.setProperty('--panel', `rgba(${triple(panel)}, ${.42 - c.light * .04})`);
+    s.setProperty('--sheet', `rgb(${triple(sheet)})`);
+  },
+};
+
+/* ------------------------------------------------------------------ silk
+   The app's shader (SilkEffect HLSL / SilkBackground AGSL), ported to WebGL. */
+const Silk = (() => {
+  const canvas = $('#silk');
+  const gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false });
+  let time = 8, scale = .5;
+  if (!gl) return { frame() { document.body.style.background = `linear-gradient(135deg, rgb(var(--a)), rgb(var(--b)), rgb(var(--a)))`; } };
+  const vs = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }';
+  const fs = `precision highp float;
+    uniform vec2 size; uniform float time; uniform float glow; uniform vec3 colorA; uniform vec3 colorB; uniform vec3 colorC;
+    void main(){
+      vec2 coord = vec2(gl_FragCoord.x, size.y - gl_FragCoord.y);
+      vec2 uv = coord / size; float t = time; float u = uv.x; float v = uv.y;
+      float p = sin(u * 3.1 + t * .5 + 2. * sin(v * 2.3 - t * .33));
+      float q = sin(v * 4. - t * .28 + 2.4 * sin(u * 2.6 + t * .2));
+      float f = sin((p + q) * 2.3 + u * 1.6);
+      float sheen = pow((f + 1.) * .5, 3.) * glow * .5;
+      float crease = pow(abs(sin((p - q) * 2.6 + v * 1.8)), 14.) * glow * .07;
+      vec3 c = mix(colorA, colorB, (p + 1.) * .36 * clamp(glow * 3., 0., 1.));
+      c = mix(c, colorC, clamp(sheen + crease, 0., 1.));
+      float n = fract(sin(dot(coord / ${(1).toFixed(1)}, vec2(12.9898, 78.233))) * 43758.5453);
+      gl_FragColor = vec4(c + (n - .5) / 170., 1.);
+    }`;
+  const shader = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = n => gl.getUniformLocation(prog, n);
+  const uSize = U('size'), uTime = U('time'), uGlow = U('glow'), uA = U('colorA'), uB = U('colorB'), uC = U('colorC');
+  function resize() {
+    const w = Math.max(1, Math.round(innerWidth * scale)), h = Math.max(1, Math.round(innerHeight * scale));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
+  }
+  addEventListener('resize', resize); resize();
+  let since = 0;
+  return {
+    frame(dt, speed, force) {
+      time += dt * speed * .62;
+      since += dt;
+      if (!force && since < 1 / 30) return;   // the silk moves slowly: 30 updates a second look the same as 60
+      since = 0;
+      const c = Theme.cur;
+      gl.uniform2f(uSize, canvas.width, canvas.height);
+      gl.uniform1f(uTime, time); gl.uniform1f(uGlow, .35);
+      gl.uniform3f(uA, c.a[0] / 255, c.a[1] / 255, c.a[2] / 255);
+      gl.uniform3f(uB, c.b[0] / 255, c.b[1] / 255, c.b[2] / 255);
+      gl.uniform3f(uC, c.c[0] / 255, c.c[1] / 255, c.c[2] / 255);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    },
+  };
+})();
+
+/* ------------------------------------------------------------------ lyrics
+   The Android LyricsView: each line follows on its own spring, a beat after the one above,
+   so a change of line ripples down. Far lines blur. Lines can be tapped to seek. */
+const LEAD = .15;
+function lyricLines(album) {
+  const credits = album.credits || [`作詞：${album.artist}`, `作曲：${album.artist}`];
+  const out = [{ t: 0, text: credits[0], kind: 'credit' }, { t: 1.2, text: credits[1], kind: 'credit' }];
+  album.lines.forEach((text, i) => out.push({ t: 4.6 + i * 2.9, text, kind: 'line' }));
+  out.push({ t: 27.4, end: 33, text: '', kind: 'break' });
+  album.lines.slice(4).forEach((text, i) => out.push({ t: 33 + i * 2.5, text, kind: 'line' }));
+  return out;
+}
+
+class LyricView {
+  constructor(el, onSeek) {
+    this.el = el; this.onSeek = onSeek; this.rows = []; this.focus = 0; this.active = -1;
+    this.blur = true; this.anchor = .4;
+    new ResizeObserver(() => this.measure()).observe(el);
+  }
+  setSong(album) {
+    this.el.textContent = '';
+    this.lines = lyricLines(album);
+    this.rows = this.lines.map(line => {
+      const row = document.createElement('div');
+      row.className = 'line ' + line.kind + (line.kind === 'line' ? ' seek' : '');
+      row.setAttribute('role', 'listitem');
+      const txt = document.createElement('span');
+      txt.className = 'txt';
+      if (line.kind === 'break') {
+        txt.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+        txt.setAttribute('aria-hidden', 'true');
+      } else {
+        txt.textContent = line.text;
+      }
+      if (line.kind === 'line') txt.addEventListener('click', () => this.onSeek(line.t));
+      row.append(txt);
+      this.el.append(row);
+      return { row, txt, line, x: 0, v: 0, target: 0, start: 0, blur: -1 };
+    });
+    this.active = -1; this.focus = 0;
+    this.measure(true);
+  }
+  measure(snap) {
+    if (!this.rows.length) return;
+    const size = parseFloat(getComputedStyle(this.el).getPropertyValue('--size')) || 36;
+    const gap = size * .7;
+    let y = 0;
+    this.tops = this.rows.map(r => { const top = y; y += r.row.offsetHeight + (r.line.kind === 'credit' ? gap * .55 : gap); return top; });
+    this.heights = this.rows.map(r => r.row.offsetHeight);
+    this.height = this.el.clientHeight;
+    const goal = this.goal(this.focus);
+    this.rows.forEach(r => { r.target = goal; if (snap) { r.x = goal; r.v = 0; } });
+  }
+  goal(i) { return this.height * this.anchor - (this.tops[i] + this.heights[i] / 2); }
+  frame(now, dt, position) {
+    if (!this.rows.length || !this.tops) return;
+    let active = -1;
+    for (let i = 0; i < this.lines.length; i++) {
+      if (this.lines[i].t > position + LEAD) break;
+      if (this.lines[i].kind !== 'credit') active = i;
+    }
+    if (active !== this.active) {
+      if (this.active >= 0) this.rows[this.active].row.classList.remove('on');
+      if (active >= 0) this.rows[active].row.classList.add('on');
+      this.active = active;
+      const focus = Math.max(0, active);
+      if (focus !== this.focus || dt === 0) {
+        this.focus = focus;
+        const goal = this.goal(focus);
+        // Lines above the new one move first; each line below starts a beat later.
+        this.rows.forEach((r, i) => { r.target = goal; r.start = now + Math.min(9, Math.max(0, i - focus + 2)) * 42; });
+      }
+    }
+    const k = 140, c = 2 * .86 * Math.sqrt(k);
+    const step = Math.min(dt, 1 / 30);
+    this.rows.forEach((r, i) => {
+      if (now >= r.start && !reduced) {
+        const a = -k * (r.x - r.target) - c * r.v;
+        r.v += a * step; r.x += r.v * step;
+      } else if (reduced) { r.x = r.target; }
+      r.row.style.transform = `translate3d(0, ${(this.tops[i] + r.x).toFixed(1)}px, 0)`;
+      const distance = Math.abs(i - this.focus);
+      const blur = this.blur && r.line.kind !== 'credit' && distance > 1 ? Math.min(4, distance - 1) * 1.1 : 0;
+      if (blur !== r.blur) { r.blur = blur; r.txt.style.filter = blur ? `blur(${blur}px)` : ''; }
+      if (r.line.kind === 'break') {
+        const span = r.line.end - r.line.t, p = Math.min(1, Math.max(0, (position - r.line.t) / span));
+        const on = i === this.active;
+        r.txt.querySelectorAll('i').forEach((dot, j) => {
+          const lit = Math.min(1, Math.max(0, p * 3 - j));
+          dot.style.setProperty('--dot', on ? (1 + .1 * Math.sin(position * Math.PI * 2 / 2.4)).toFixed(3) : 0);
+          dot.style.opacity = (.28 + .72 * lit).toFixed(2);
+        });
+      }
+    });
+  }
+}
+
+/* ------------------------------------------------------------------ waveform
+   Windows' ripple progress: the loudness of the whole song as a line, played part filled. */
+function loudness(album, n = 180) {
+  const variant = ALBUMS.indexOf(album) % 4;
+  const arrangement = [[0, .12], [5 + variant, .34], [11 + variant, .58], [17 + variant, 1], [24 + variant, .3], [29 + variant, 1], [36, .42], [42, .1]];
+  const gainAt = t => {
+    for (let s = 0; s < arrangement.length - 1; s++) {
+      const [from, a] = arrangement[s], [to, b] = arrangement[s + 1];
+      if (t > to) continue;
+      const x = Math.min(1, Math.max(0, (t - from) / Math.min(1.6, to - from)));
+      return a + (b - a) * x * x * (3 - 2 * x);
+    }
+    return .1;
+  };
+  const seed = album.id.length * 7.3;
+  return Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1) * DURATION;
+    const ripple = .82 + .1 * Math.sin(t * 2.1 + seed) + .08 * Math.sin(t * 5.3 + seed * 2);
+    return Math.max(.04, gainAt(t) * ripple);
+  });
+}
+const Wave = {
+  canvas: $('#wave'), heights: [],
+  draw(progress) {
+    const cv = this.canvas, dpr = Math.min(2, devicePixelRatio || 1);
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    const css = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+    const H = this.heights, n = H.length, base = h - 2, top = 6;
+    const pts = H.map((v, i) => [i / (n - 1) * w, base - v * (base - top)]);
+    const path = () => {
+      g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < n; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; g.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2); }
+      g.lineTo(w, pts[n - 1][1]);
+    };
+    const px = progress * w;
+    g.save(); g.beginPath(); g.rect(0, 0, px, h); g.clip();
+    path(); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fillStyle = `rgba(${css}, .2)`; g.fill();
+    path(); g.strokeStyle = `rgba(${css}, 1)`; g.lineWidth = 1.6; g.stroke(); g.restore();
+    g.save(); g.beginPath(); g.rect(px, 0, w - px, h); g.clip();
+    path(); g.strokeStyle = `rgba(${css}, .45)`; g.lineWidth = 1.2; g.stroke(); g.restore();
+    const i = Math.min(n - 1, Math.round(progress * (n - 1)));
+    g.beginPath(); g.arc(px, pts[i][1], 4.5, 0, Math.PI * 2); g.fillStyle = `rgb(${css})`; g.fill();
+  },
+};
+
+/* ------------------------------------------------------------------ player */
+const covers = new Map();
+const palettes = new Map();
+const Player = {
+  index: 0, time: 0, playing: !reduced, offset: 0, mode: 0,
+  album() { return ALBUMS[this.index]; },
+};
+const heroLyrics = new LyricView($('#heroLyrics'), t => seek(t - 0));
+const panelLyrics = new LyricView($('#panelLyrics'), t => seek(t - Player.offset / 1000));
+heroLyrics.anchor = .42;
+
+function seek(t) { Player.time = Math.min(DURATION - .2, Math.max(0, t)); }
+
+function showCover(album, instant) {
+  const holder = $('#cover');
+  const img = document.createElement('img');
+  img.alt = `${album.title} 的封面`;
+  img.src = covers.get(album.id);
+  if (instant || reduced) { holder.textContent = ''; holder.append(img); return; }
+  img.className = 'arriving';
+  const old = [...holder.querySelectorAll('img')];
+  holder.append(img);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    img.classList.remove('arriving');
+    old.forEach(o => { o.classList.add('leaving'); setTimeout(() => o.remove(), 900); });
+  }));
+}
+
+function selectAlbum(i, instant) {
+  Player.index = (i + ALBUMS.length) % ALBUMS.length;
+  const album = Player.album();
+  Player.time = 0;
+  $('#title').textContent = album.title;
+  $('#artist').textContent = album.artist;
+  showCover(album, instant);
+  heroLyrics.setSong(album);
+  panelLyrics.setSong(album);
+  Wave.heights = loudness(album);
+  if (!colorActive) Theme.set(palettes.get(album.id), instant);
+  document.querySelectorAll('.swatch').forEach((b, j) => b.setAttribute('aria-checked', j === Player.index));
+  moveRing(instant);
+}
+
+/* A cover the visitor chose starts on its first sung line, not on four seconds of credits. */
+function pick(i) { selectAlbum(i); Player.time = 4.4; }
+
+function moveRing(instant) {
+  const b = document.querySelectorAll('.swatch')[Player.index];
+  const ring = $('#ring');
+  if (!b) return;
+  if (instant) { ring.style.transition = 'none'; requestAnimationFrame(() => ring.style.transition = ''); }
+  ring.style.transform = `translate(${b.offsetLeft - 5}px, ${b.offsetTop - 5}px)`;
+}
+addEventListener('resize', () => moveRing(true));
+
+function setPlaying(on) {
+  Player.playing = on;
+  const btn = $('#toggle');
+  btn.setAttribute('aria-label', on ? '暫停' : '播放');
+  btn.innerHTML = on ? '<svg class="icon"><use href="#i-pause"/></svg>' : '<svg class="icon solid"><use href="#i-play"/></svg>';
+  $('#cover').style.setProperty('--cover-scale', on ? 1 : .9);
+}
+
+/* ------------------------------------------------------------------ colour reel (scroll-driven) */
+const REEL = ['tide', 'noon', 'mist'];
+let colorActive = false, reelPos = 0;
+function buildReel() {
+  const reel = $('#reel');
+  REEL.forEach(id => {
+    const album = ALBUMS.find(a => a.id === id);
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<img src="${covers.get(id)}" alt="${album.title} 的封面"><figcaption>${album.title} · ${album.artist}</figcaption>`;
+    reel.append(fig);
+  });
+}
+function paintReel(pos) {
+  reelPos = pos;
+  const figs = document.querySelectorAll('#reel figure');
+  figs.forEach((f, i) => {
+    // The cover in front swells a little and lets go; the next one grows into its place from behind.
+    const d = Math.max(-1, Math.min(1, i - pos));   // 0 = in front, 1 = next, -1 = handed over
+    const s = d >= 0 ? 1 - d * .14 : 1 - d * .08;
+    const y = d >= 0 ? d * 6 : d * 4;
+    const o = d >= 0 ? 1 - d * 1.15 : 1 + d * 1.6;
+    f.style.transform = `translate3d(0, ${y}%, 0) scale(${s.toFixed(4)})`;
+    f.style.opacity = Math.max(0, Math.min(1, o)).toFixed(3);
+    f.style.zIndex = d < 0 ? 3 : 2 - Math.round(d);
+  });
+  const lo = Math.min(REEL.length - 1, Math.floor(pos)), hi = Math.min(REEL.length - 1, lo + 1), t = pos - lo;
+  const p = palettes.get(REEL[lo]), q = palettes.get(REEL[hi]);
+  // Colours blend with the scroll; text switches between light and dark at the midpoint, so it never sits at a grey that reads on neither.
+  const blend = { a: mix(p.a, q.a, t), b: mix(p.b, q.b, t), c: mix(p.c, q.c, t), light: t < .5 ? p.light : q.light };
+  if (colorActive) Theme.set(blend);
+  const shown = palettes.get(REEL[Math.round(pos)]);
+  document.querySelectorAll('#chips div').forEach(div => {
+    const k = div.querySelector('i').dataset.k;
+    div.querySelector('i').style.background = `rgb(${shown[k].map(Math.round).join(',')})`;
+    div.querySelector('span').textContent = hex(shown[k]);
+  });
+}
+
+/* ------------------------------------------------------------------ boot */
+function load(src) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; }); }
+
+async function boot() {
+  const icon = await load('assets/silk-icon.png');
+  ALBUMS.forEach((album, i) => {
+    let source;
+    if (album.icon) {
+      // The icon as a full-bleed cover: its own tile gradient fills the corners, so there is no second rounded edge.
+      source = document.createElement('canvas');
+      source.width = source.height = 720;
+      const g = source.getContext('2d');
+      const grad = g.createLinearGradient(0, 0, 260, 720);
+      grad.addColorStop(0, '#3A2550'); grad.addColorStop(1, '#21142F');
+      g.fillStyle = grad; g.fillRect(0, 0, 720, 720);
+      g.drawImage(icon, -50, -50, 820, 820);
+      covers.set(album.id, source.toDataURL('image/png'));
+    } else {
+      source = drawCover(album, i - 1);
+      covers.set(album.id, source.toDataURL('image/png'));
+    }
+    palettes.set(album.id, paletteFrom(source));
+  });
+  // The brand track takes its colours from the icon: deep plum, not the icon's corners.
+  Theme.set(palettes.get('silk'), true);
+
+  const sw = $('#swatches');
+  ALBUMS.forEach((album, i) => {
+    const b = document.createElement('button');
+    b.className = 'swatch'; b.setAttribute('role', 'radio'); b.setAttribute('aria-label', `${album.title}，${album.artist}`);
+    b.innerHTML = `<img src="${covers.get(album.id)}" alt="">`;
+    b.addEventListener('click', () => { pick(i); if (!Player.playing) setPlaying(true); });
+    sw.append(b);
+  });
+  buildReel();
+  selectAlbum(0, true);
+  Player.time = 4.4;   // open on the first line, so the page greets with a sentence, not with credits
+  setPlaying(Player.playing);
+  paintReel(0);
+  wire();
+  motion();
+  requestAnimationFrame(loop);
+}
+
+function wire() {
+  $('#toggle').addEventListener('click', () => setPlaying(!Player.playing));
+  $('#prev').addEventListener('click', () => pick(Player.index - 1));
+  $('#next').addEventListener('click', () => pick(Player.index + 1));
+  $('#like').addEventListener('click', e => {
+    const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+    e.currentTarget.setAttribute('aria-pressed', on);
+    e.currentTarget.setAttribute('aria-label', on ? '取消收藏' : '收藏');
+    e.currentTarget.querySelector('svg').classList.toggle('solid', on);
+    if (on && window.gsap && !reduced) gsap.fromTo(e.currentTarget, { scale: .7 }, { scale: 1, duration: .5, ease: 'back.out(3)' });
+  });
+  const modes = [['i-repeat', '清單循環'], ['i-repeat-one', '單曲循環'], ['i-shuffle', '隨機播放']];
+  $('#mode').addEventListener('click', e => {
+    Player.mode = (Player.mode + 1) % 3;
+    e.currentTarget.innerHTML = `<svg class="icon"><use href="#${modes[Player.mode][0]}"/></svg>`;
+    e.currentTarget.setAttribute('aria-label', modes[Player.mode][1]);
+  });
+  const wave = $('#wave');
+  const seekAt = x => { const r = wave.getBoundingClientRect(); seek((x - r.left) / r.width * DURATION); };
+  wave.addEventListener('pointerdown', e => { seekAt(e.clientX); wave.setPointerCapture(e.pointerId); });
+  wave.addEventListener('pointermove', e => { if (wave.hasPointerCapture(e.pointerId)) seekAt(e.clientX); });
+  wave.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight') seek(Player.time + 5);
+    if (e.key === 'ArrowLeft') seek(Player.time - 5);
+  });
+
+  // The lyric panel's options act on its own lyrics, the way the app's lyric sheet does.
+  const panel = $('#panelLyrics');
+  document.querySelectorAll('[data-group="align"] .chip').forEach(chip => chip.addEventListener('click', () => {
+    document.querySelectorAll('[data-group="align"] .chip').forEach(c => c.setAttribute('aria-pressed', c === chip));
+    panel.dataset.align = chip.dataset.v;
+  }));
+  $('#optBlur').addEventListener('click', e => {
+    panelLyrics.blur = !panelLyrics.blur;
+    e.currentTarget.setAttribute('aria-pressed', panelLyrics.blur);
+    panelLyrics.rows.forEach(r => r.blur = -1);
+  });
+  $('#optBold').addEventListener('click', e => {
+    const on = panel.dataset.bold !== '1';
+    panel.dataset.bold = on ? '1' : '0';
+    e.currentTarget.setAttribute('aria-pressed', on);
+  });
+  document.querySelectorAll('[data-shift]').forEach(chip => chip.addEventListener('click', () => {
+    Player.offset = Math.max(-10000, Math.min(10000, Player.offset + Number(chip.dataset.shift)));
+    const o = Player.offset;
+    $('#shiftOut').textContent = o > 0 ? `提前 ${(o / 1000).toFixed(1)} 秒` : o < 0 ? `延後 ${(-o / 1000).toFixed(1)} 秒` : '未調整';
+  }));
+}
+
+let last = 0;
+function loop(now) {
+  const dt = last ? Math.min(.1, (now - last) / 1000) : 0;
+  last = now;
+  if (Player.playing) {
+    Player.time += dt;
+    if (Player.time >= DURATION) {
+      if (Player.mode === 1) Player.time = 0;
+      else selectAlbum(Player.mode === 2 ? Math.floor(Math.random() * ALBUMS.length) : Player.index + 1);
+    }
+  }
+  Theme.step(dt);
+  Silk.frame(dt, reduced ? 0 : (Player.playing ? 1 : .35), dt === 0);
+  heroLyrics.frame(now, dt, Player.time);
+  panelLyrics.frame(now, dt, Player.time + Player.offset / 1000);
+  Wave.draw(Player.time / DURATION);
+  const s = Math.floor(Player.time);
+  $('#pos').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  requestAnimationFrame(loop);
+}
+
+/* ------------------------------------------------------------------ motion (GSAP + Lenis) */
+function motion() {
+  const nav = $('#nav');
+  addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 40), { passive: true });
+  if (!window.gsap || !window.ScrollTrigger) { colorActive = false; return; }
+  gsap.registerPlugin(ScrollTrigger);
+
+  if (window.Lenis && !reduced) {
+    const lenis = new Lenis({ lerp: .11 });
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add(t => lenis.raf(t * 1000));
+    gsap.ticker.lagSmoothing(0);
+    document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) { e.preventDefault(); lenis.scrollTo(target, { offset: 0, duration: 1.2 }); }
+    }));
+  }
+
+  const mm = gsap.matchMedia();
+  mm.add('(prefers-reduced-motion: no-preference)', () => {
+    // First visit: the cover arrives first, the rest follows in reading order.
+    gsap.timeline({ defaults: { ease: 'expo.out' } })
+      .from('.cover-frame', { scale: .9, opacity: 0, duration: 1.1 })
+      .from('.track > *, .controls > *, .cta > *', { y: 14, opacity: 0, duration: .7, stagger: .05 }, '-=.85')
+      .from('.hero-lyrics', { opacity: 0, x: 24, duration: .9 }, '-=.8')
+      .from('.tray', { opacity: 0, y: 12, duration: .7 }, '-=.6');
+
+    // Scroll-driven: one cover hands over to the next while the whole page takes its colours.
+    ScrollTrigger.create({
+      trigger: '#colorStage', start: 'top top', end: '+=220%', pin: true, scrub: true,
+      onToggle: self => {
+        colorActive = self.isActive;
+        if (!colorActive) Theme.set(palettes.get(Player.album().id));
+        else paintReel(reelPos);
+      },
+      onUpdate: self => paintReel(Math.min(REEL.length - 1, self.progress * (REEL.length - .6))),
+    });
+    gsap.from('.color-copy > *', { y: 30, opacity: 0, duration: .9, stagger: .07, ease: 'expo.out', scrollTrigger: { trigger: '#color', start: 'top 70%', once: true } });
+
+    // Section entrances, once each, shaped by what the block is.
+    gsap.utils.toArray('.reveal').forEach(el => gsap.from(el.children.length ? el.children : el, {
+      y: 26, opacity: 0, duration: .8, stagger: .06, ease: 'expo.out', scrollTrigger: { trigger: el, start: 'top 82%', once: true },
+    }));
+    // Panels slide in like a drawer closing on its damper.
+    gsap.utils.toArray('.reveal-panel').forEach((el, i) => gsap.from(el, {
+      y: 60, opacity: 0, duration: .9, ease: 'power4.out', delay: (i % 2) * .08, scrollTrigger: { trigger: el, start: 'top 85%', once: true },
+    }));
+    // Screens land with a little weight.
+    gsap.from('.window', { y: -50, opacity: 0, duration: .9, ease: 'back.out(1.25)', scrollTrigger: { trigger: '.devices', start: 'top 78%', once: true } });
+    gsap.from('.phones .phone', { y: -60, opacity: 0, duration: .85, ease: 'back.out(1.4)', stagger: .08, delay: .12, scrollTrigger: { trigger: '.devices', start: 'top 70%', once: true } });
+    // Rows unfold in reading order; each top rule draws first.
+    gsap.utils.toArray('.reveal-row').forEach((el, i) => gsap.from(el, {
+      y: 22, opacity: 0, duration: .7, ease: 'expo.out', delay: (i % 2) * .06, scrollTrigger: { trigger: el, start: 'top 88%', once: true },
+    }));
+  });
+  mm.add('(prefers-reduced-motion: reduce)', () => { colorActive = false; paintReel(0); });
+}
+
+boot();
+})();
+</script>
+</body>
+</html>
