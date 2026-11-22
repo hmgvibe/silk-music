@@ -17,8 +17,10 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.io.IOException
 
@@ -100,6 +102,43 @@ class QqMusicSource(private val bridge: Bridge) : MusicSource {
         }
         val root = bridge.postJson("/user/song/like", body.toString())
         if (int(root, "code") != 200) throw IllegalStateException("收藏失敗，請稍後再試")
+    }
+
+    override suspend fun editablePlaylists(): List<Collection> {
+        if (!isSignedIn) return emptyList()
+        return array(bridge.get("/user/playlist"), "playlist").orEmpty().mapNotNull { item ->
+            // Directories from 200 up are QQ Music's own (such as 我喜歡); songs cannot be written to them here.
+            val dirId = int(item, "dirId", "dirid")
+            val dirType = int(item, "dirType", "dirtype")
+            if ((dirId != null && dirId >= 200) || (dirType != null && dirType > 0)) null
+            else parsePlaylist(item, CollectionKind.Owned)
+        }
+    }
+
+    override suspend fun createPlaylist(name: String): Collection {
+        if (!isSignedIn) throw IllegalStateException("登入後才能建立歌單")
+        val root = bridge.postJson("/user/playlist/create", buildJsonObject { put("name", name) }.toString())
+        val tid = str(root, "tid")
+        if (int(root, "code") != 200 || tid == null) throw IllegalStateException("建立歌單失敗，請稍後再試")
+        return Collection(CollectionKind.Owned, tid, cleanText(str(root, "name") ?: name), "歌單", "")
+    }
+
+    override suspend fun addToPlaylist(playlist: Collection, song: Song) {
+        if (!isSignedIn) throw IllegalStateException("登入後才能加入歌單")
+        if (song.kind != 0) throw IllegalStateException("這首歌無法加入歌單")
+        val id = if (song.numericId > 0) song.numericId else resolveSongId(song)
+        val body = buildJsonObject {
+            put("tid", playlist.id.toLong())
+            put("op", "add")
+            putJsonArray("songs") {
+                addJsonObject {
+                    put("id", id)
+                    put("type", 0)
+                }
+            }
+        }
+        val root = bridge.postJson("/user/playlist/tracks", body.toString())
+        if (int(root, "code") != 200) throw IllegalStateException("加入歌單失敗，請稍後再試")
     }
 
     private suspend fun resolveSongId(song: Song): Long {

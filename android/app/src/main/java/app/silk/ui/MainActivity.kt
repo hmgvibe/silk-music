@@ -139,6 +139,8 @@ private fun SilkRoot(vm: AppViewModel) {
 
         if (queueOpen) QueueSheet(vm) { queueOpen = false }
         if (accountOpen) AccountSheet(vm) { accountOpen = false }
+        vm.playlistPick?.let { song -> PlaylistPickerSheet(vm, song) }
+        vm.playlistNaming?.let { naming -> PlaylistNameDialog(vm, naming) }
     }
 }
 

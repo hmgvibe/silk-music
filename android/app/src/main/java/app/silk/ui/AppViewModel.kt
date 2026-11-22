@@ -460,8 +460,93 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ---------------------------------------------------------------- the user's own playlists
+
+    private var editable: List<Collection>? = null
+
+    /** The song being added to a playlist; the picker sheet is open while this is set. */
+    var playlistPick by mutableStateOf<Song?>(null)
+        private set
+    /** The playlists the picker offers; null while they load. */
+    var pickablePlaylists by mutableStateOf<List<Collection>?>(null)
+        private set
+    /** The new-playlist dialog is open while this is set; its song, if any, goes into the playlist once made. */
+    var playlistNaming by mutableStateOf<PlaylistNaming?>(null)
+        private set
+
+    fun pickPlaylist(song: Song) {
+        if (!signedIn) return open(Screen.Login)
+        playlistPick = song
+        pickablePlaylists = editable
+        if (editable != null) return
+        val music = source ?: return
+        viewModelScope.launch {
+            pickablePlaylists = try {
+                music.editablePlaylists().also { editable = it }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toast("歌單載入失敗，請稍後再試")
+                emptyList()
+            }
+        }
+    }
+
+    fun closePlaylistPick() {
+        playlistPick = null
+    }
+
+    fun newPlaylist(song: Song? = null) {
+        if (!signedIn) return open(Screen.Login)
+        playlistPick = null
+        playlistNaming = PlaylistNaming(song)
+    }
+
+    fun closePlaylistNaming() {
+        playlistNaming = null
+    }
+
+    fun createPlaylist(name: String) {
+        val music = source ?: return
+        val song = playlistNaming?.song
+        playlistNaming = null
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val playlist = music.createPlaylist(trimmed)
+                editable = null
+                if (song != null) addToPlaylist(playlist, song, created = true)
+                else toast("已建立歌單「${playlist.title}」")
+                if (screens.last() == Screen.Library) loadLibrary()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toast(e.message ?: "建立歌單失敗，請稍後再試")
+            }
+        }
+    }
+
+    fun addToPlaylist(playlist: Collection, song: Song, created: Boolean = false) {
+        val music = source ?: return
+        playlistPick = null
+        viewModelScope.launch {
+            try {
+                music.addToPlaylist(playlist, song)
+                lists.remove(keyOf(playlist))
+                toast(if (created) "已建立「${playlist.title}」並加入這首歌" else "已加入「${playlist.title}」")
+                if (screens.last() == Screen.Library) loadLibrary()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toast(e.message ?: "加入歌單失敗，請稍後再試")
+            }
+        }
+    }
+
     fun signOut() {
         val music = source ?: return
+        editable = null
         viewModelScope.launch {
             music.signOut()
             liked = emptySet()
@@ -699,5 +784,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val LIKED = Collection(CollectionKind.Liked, "liked", "我喜歡", "你收藏的歌", "")
     }
 }
+
+/** A pending new playlist; [song] is added to it once it exists. */
+data class PlaylistNaming(val song: Song?)
 
 data class SongListStateOf<T>(val items: List<T> = emptyList(), val loading: Boolean = false, val error: String? = null)

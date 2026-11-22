@@ -36,6 +36,7 @@ public sealed class DemoSource : IMusicSource
     public DemoSource() => Directory.CreateDirectory(_directory);
 
     private readonly HashSet<string> _liked = [];
+    private readonly List<(Collection Playlist, List<Song> Songs)> _playlists = [];
 
     public bool IsSignedIn => true;
 
@@ -79,9 +80,30 @@ public sealed class DemoSource : IMusicSource
     public async Task<IReadOnlyList<Collection>> GetLibraryAsync(CancellationToken ct = default)
     {
         await Task.Delay(280, ct);
-        return Albums
-            .Select(a => new Collection(CollectionKind.Album, a.Id, a.Title, a.Artist, CoverPath(a)))
+        return _playlists.Select(p => p.Playlist with { Subtitle = $"{p.Songs.Count} 首" })
+            .Concat(Albums.Select(a => new Collection(CollectionKind.Album, a.Id, a.Title, a.Artist, CoverPath(a))))
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<Collection>> GetEditablePlaylistsAsync(CancellationToken ct = default)
+    {
+        await Task.Delay(120, ct);
+        return _playlists.Select(p => p.Playlist).ToList();
+    }
+
+    public async Task<Collection> CreatePlaylistAsync(string name, CancellationToken ct = default)
+    {
+        await Task.Delay(200, ct);
+        var playlist = new Collection(CollectionKind.Owned, $"demo-list-{_playlists.Count + 1}", name, "歌單", "");
+        _playlists.Insert(0, (playlist, []));
+        return playlist;
+    }
+
+    public async Task AddToPlaylistAsync(Collection playlist, Song song, CancellationToken ct = default)
+    {
+        await Task.Delay(160, ct);
+        var songs = _playlists.First(p => p.Playlist.Id == playlist.Id).Songs;
+        if (songs.All(s => s.Mid != song.Mid)) songs.Add(song);
     }
 
     public async Task<IReadOnlyList<Song>> GetLikedAsync(CancellationToken ct = default)
@@ -92,6 +114,8 @@ public sealed class DemoSource : IMusicSource
 
     public Task<IReadOnlyList<Song>> GetSongsAsync(Collection collection, CancellationToken ct = default)
     {
+        if (collection.Kind == CollectionKind.Owned)
+            return Task.FromResult<IReadOnlyList<Song>>(_playlists.First(p => p.Playlist.Id == collection.Id).Songs.ToList());
         var album = Albums.First(a => a.Id == collection.Id);
         return Task.FromResult<IReadOnlyList<Song>>(TracksOf(album).ToList());
     }

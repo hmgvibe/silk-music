@@ -66,6 +66,7 @@ public partial class MainWindow : Window
             if (SongList.Items.Count > 0) SongList.ScrollIntoView(SongList.Items[0]);
         };
         model.PlayerRequested += () => SetPlayerOpen(true);
+        model.PlaylistNameRequested += ShowPlaylistName;
         model.NavigationRequested += () =>
         {
             SetQueueOpen(false);
@@ -400,6 +401,53 @@ public partial class MainWindow : Window
     {
         _model.RefreshOutput();
         SetPlayerOptionsOpen(true);
+    }
+
+    // ---------------------------------------------------------------- new playlist
+
+    private Song? _playlistSong;
+
+    private void OnNewPlaylist(object sender, RoutedEventArgs e) => _model.RequestNewPlaylist();
+
+    private void ShowPlaylistName(Song? song)
+    {
+        _playlistSong = song;
+        SetQueueOpen(false);
+        PlaylistNameNote.Text = song is null ? "建立後會出現在音樂庫" : $"建立後加入「{song.Title}」";
+        PlaylistNameInput.Text = "";
+        UpdatePlaylistName();
+        PlaylistNameLayer.Visibility = Visibility.Visible;
+        Dispatcher.BeginInvoke(() => Keyboard.Focus(PlaylistNameInput), System.Windows.Threading.DispatcherPriority.Input);
+    }
+
+    private void HidePlaylistName() => PlaylistNameLayer.Visibility = Visibility.Collapsed;
+
+    private void UpdatePlaylistName()
+    {
+        PlaylistNameCount.Text = $"{PlaylistNameInput.Text.Length} / {AppModel.PlaylistNameLimit}";
+        PlaylistNameConfirm.IsEnabled = PlaylistNameInput.Text.Trim().Length > 0;
+    }
+
+    private void OnPlaylistNameChanged(object sender, TextChangedEventArgs e) => UpdatePlaylistName();
+
+    private void OnPlaylistNameCancel(object sender, RoutedEventArgs e) => HidePlaylistName();
+
+    private void OnPlaylistNameScrim(object sender, MouseButtonEventArgs e) => HidePlaylistName();
+
+    private async void OnPlaylistNameConfirm(object sender, RoutedEventArgs e)
+    {
+        var name = PlaylistNameInput.Text.Trim();
+        if (name.Length == 0) return;
+        HidePlaylistName();
+        await _model.CreatePlaylistAsync(name, _playlistSong);
+    }
+
+    private void OnPlaylistNameKey(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) OnPlaylistNameConfirm(sender, e);
+        else if (e.Key == Key.Escape) HidePlaylistName();
+        else return;
+        e.Handled = true;
     }
 
     private void OnLyricShift(object sender, RoutedEventArgs e)

@@ -48,6 +48,7 @@ class DemoSource(context: Context) : MusicSource {
 
     private val directory = File(context.cacheDir, "demo-v2").apply { mkdirs() }
     private val likedIds = mutableSetOf<String>()
+    private val playlists = mutableListOf<Pair<Collection, MutableList<Song>>>()
 
     override val isSignedIn: Boolean = true
     override var streamQuality: String = "best"
@@ -81,7 +82,26 @@ class DemoSource(context: Context) : MusicSource {
 
     override suspend fun library(): List<Collection> {
         delay(240)
-        return albums.map { Collection(CollectionKind.Album, it.id, it.title, it.artist, coverOf(it)) }
+        return playlists.map { (playlist, songs) -> playlist.copy(subtitle = "${songs.size} 首", cover = songs.firstOrNull()?.cover.orEmpty()) } +
+            albums.map { Collection(CollectionKind.Album, it.id, it.title, it.artist, coverOf(it)) }
+    }
+
+    override suspend fun editablePlaylists(): List<Collection> {
+        delay(120)
+        return playlists.map { it.first }
+    }
+
+    override suspend fun createPlaylist(name: String): Collection {
+        delay(200)
+        val playlist = Collection(CollectionKind.Owned, "demo-list-${playlists.size + 1}", name, "歌單", "")
+        playlists.add(0, playlist to mutableListOf())
+        return playlist
+    }
+
+    override suspend fun addToPlaylist(playlist: Collection, song: Song) {
+        delay(160)
+        val songs = playlists.first { it.first.id == playlist.id }.second
+        if (songs.none { it.mid == song.mid }) songs += song
     }
 
     override suspend fun liked(): List<Song> {
@@ -99,6 +119,7 @@ class DemoSource(context: Context) : MusicSource {
         CollectionKind.Daily -> dailySongs()
         CollectionKind.Guess -> guessYouLike()
         CollectionKind.Liked -> liked()
+        CollectionKind.Owned -> playlists.first { it.first.id == collection.id }.second.toList()
         else -> tracksOf(albums.first { it.id == collection.id })
     }
 

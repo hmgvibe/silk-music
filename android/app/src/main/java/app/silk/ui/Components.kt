@@ -125,6 +125,7 @@ fun SongRow(
     onAddToQueue: () -> Unit,
     onLike: () -> Unit,
     onSinger: (Artist) -> Unit = {},
+    onAddToPlaylist: (() -> Unit)? = null,
 ) {
     val silk = LocalSilk.current
     var menu by remember { mutableStateOf(false) }
@@ -161,7 +162,7 @@ fun SongRow(
                 Icon(SilkIcons.More, contentDescription = null, tint = silk.fg70, modifier = Modifier.size(20.dp))
             }
         }
-        SongMenu(menu, onDismiss = { menu = false }, isLiked, onPlayNext, onAddToQueue, onLike, song.singers, onSinger)
+        SongMenu(menu, onDismiss = { menu = false }, isLiked, onPlayNext, onAddToQueue, onLike, song.singers, onSinger, onAddToPlaylist)
     }
 }
 
@@ -175,6 +176,7 @@ fun SongMenu(
     onLike: () -> Unit,
     singers: List<Artist> = emptyList(),
     onSinger: (Artist) -> Unit = {},
+    onAddToPlaylist: (() -> Unit)? = null,
 ) {
     val silk = LocalSilk.current
     DropdownMenu(
@@ -184,6 +186,9 @@ fun SongMenu(
         DropdownMenuItem(text = { Text("下一首播放", color = silk.fg) }, onClick = { onDismiss(); onPlayNext() })
         DropdownMenuItem(text = { Text("加入播放清單", color = silk.fg) }, onClick = { onDismiss(); onAddToQueue() })
         DropdownMenuItem(text = { Text(if (isLiked) "取消收藏" else "收藏", color = silk.fg) }, onClick = { onDismiss(); onLike() })
+        if (onAddToPlaylist != null) {
+            DropdownMenuItem(text = { Text("加入歌單", color = silk.fg) }, onClick = { onDismiss(); onAddToPlaylist() })
+        }
         singers.take(4).forEach { singer ->
             DropdownMenuItem(
                 text = { Text("歌手：${singer.name}", color = silk.fg, maxLines = 1, overflow = TextOverflow.Ellipsis) },

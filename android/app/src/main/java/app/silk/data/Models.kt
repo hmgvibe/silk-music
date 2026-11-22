@@ -63,6 +63,11 @@ interface MusicSource {
     suspend fun search(keyword: String): List<Song>
     suspend fun searchCollections(keyword: String, kind: CollectionKind): List<Collection>
     suspend fun searchSingers(keyword: String): List<Collection>
+    /** The signed-in user's own playlists that songs can be added to (not system ones such as 我喜歡). */
+    suspend fun editablePlaylists(): List<Collection>
+    /** Creates an empty playlist; QQ Music allows names of up to 20 characters. */
+    suspend fun createPlaylist(name: String): Collection
+    suspend fun addToPlaylist(playlist: Collection, song: Song)
     /** The page for one of a song's singers. */
     fun singerPage(artist: Artist): Collection
     suspend fun stream(mid: String): String?

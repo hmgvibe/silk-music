@@ -118,6 +118,27 @@ public partial class App : Application
         if (RowOf(sender) is { } row && Model is not null) await Model.ToggleLikeAsync(row.Song);
     }
 
+    /// <summary>Fills "加入歌單" with the user's own playlists each time it opens, plus a way to make a new one.</summary>
+    private async void OnMenuPlaylistsOpened(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource != sender || sender is not MenuItem menu || RowOf(sender) is not { } row || Model is not { } model) return;
+        var song = row.Song;
+        var playlists = await model.GetEditablePlaylistsAsync();
+        // Clearing first would empty the submenu for a moment, and WPF closes an empty submenu; so add, then remove the old.
+        var old = menu.Items.Cast<object>().ToList();
+        foreach (var playlist in playlists)
+        {
+            var item = new MenuItem { Header = playlist.Title };
+            item.Click += async (_, _) => await model.AddToPlaylistAsync(playlist, song);
+            menu.Items.Add(item);
+        }
+        if (playlists.Count > 0) menu.Items.Add(new Separator());
+        var create = new MenuItem { Header = "新建歌單並加入…" };
+        create.Click += (_, _) => model.RequestNewPlaylist(song);
+        menu.Items.Add(create);
+        foreach (var item in old) menu.Items.Remove(item);
+    }
+
     private void OnMenuAlbum(object sender, RoutedEventArgs e)
     {
         if (RowOf(sender) is { } row) Model?.OpenAlbumOf(row.Song);

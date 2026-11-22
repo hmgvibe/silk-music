@@ -194,11 +194,15 @@
                         </ScrollViewer>
 
                         <ScrollViewer ui:EdgeFade.IsEnabled="True" VerticalScrollBarVisibility="Auto" Focusable="False" Visibility="{Binding IsGridView, Converter={StaticResource Vis}}">
-                            <ItemsControl ItemsSource="{Binding Library}" ItemTemplate="{StaticResource GridCardTemplate}" Focusable="False" Margin="0,0,16,0">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
+                            <StackPanel>
+                                <Button Style="{StaticResource PillTextButton}" Content="＋ 新建歌單" HorizontalAlignment="Left" Margin="0,0,0,16" Click="OnNewPlaylist"
+                                        AutomationProperties.Name="新建歌單" />
+                                <ItemsControl ItemsSource="{Binding Library}" ItemTemplate="{StaticResource GridCardTemplate}" Focusable="False" Margin="0,0,16,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </StackPanel>
                         </ScrollViewer>
 
                         <Grid Visibility="{Binding IsSongsView, Converter={StaticResource Vis}}">
@@ -452,6 +456,26 @@
                     <ListBox x:Name="QueueList" Grid.Row="1" ui:EdgeFade.IsEnabled="True" Style="{StaticResource RowList}" ItemsSource="{Binding Queue}" ItemTemplate="{StaticResource QueueRowTemplate}"
                              AllowDrop="True" DragOver="OnQueueDragOver" Drop="OnQueueDrop" />
                 </Grid>
+            </Border>
+        </Grid>
+
+        <!-- New playlist: a name of up to 20 characters, as QQ Music allows. -->
+        <Grid x:Name="PlaylistNameLayer" Visibility="Collapsed">
+            <Rectangle Fill="#55000000" MouseLeftButtonDown="OnPlaylistNameScrim" />
+            <Border Width="380" HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="26" Background="{x:Static ui:Theme.Drawer}" Padding="26,22,26,20">
+                <StackPanel>
+                    <TextBlock Text="新建歌單" FontSize="19" FontWeight="SemiBold" />
+                    <TextBlock x:Name="PlaylistNameNote" FontSize="12.5" Margin="0,5,0,16" Foreground="{x:Static ui:Theme.Fg70}" TextTrimming="CharacterEllipsis" />
+                    <TextBox x:Name="PlaylistNameInput" Style="{StaticResource NameBox}" Tag="歌單名稱" MaxLength="20" KeyDown="OnPlaylistNameKey"
+                             TextChanged="OnPlaylistNameChanged" AutomationProperties.Name="歌單名稱" />
+                    <Grid Margin="0,16,0,0">
+                        <TextBlock x:Name="PlaylistNameCount" FontFamily="{StaticResource NumberFont}" FontSize="12" Foreground="{x:Static ui:Theme.Fg45}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Style="{StaticResource PillTextButton}" Content="取消" Margin="0,0,8,0" Click="OnPlaylistNameCancel" />
+                            <Button x:Name="PlaylistNameConfirm" Style="{StaticResource PillTextButton}" Content="建立" IsEnabled="False" Click="OnPlaylistNameConfirm" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
             </Border>
         </Grid>
 

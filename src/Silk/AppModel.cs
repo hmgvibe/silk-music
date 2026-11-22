@@ -666,6 +666,72 @@ public sealed class AppModel : Observable, IDisposable
         if (Current is { } song) _ = ToggleLikeAsync(song);
     }
 
+    // ---------------------------------------------------------------- the user's own playlists
+
+    private IReadOnlyList<Collection>? _editablePlaylists;
+
+    /// <summary>Asks the window for a new playlist's name; the song, when given, goes into it once made.</summary>
+    public event Action<Song?>? PlaylistNameRequested;
+
+    public const int PlaylistNameLimit = 20;
+
+    public void RequestNewPlaylist(Song? song = null)
+    {
+        if (RequireSignIn()) PlaylistNameRequested?.Invoke(song);
+    }
+
+    /// <summary>The playlists a song can be added to, kept until one is created or the account changes.</summary>
+    public async Task<IReadOnlyList<Collection>> GetEditablePlaylistsAsync()
+    {
+        if (_source is null || !IsSignedIn) return [];
+        if (_editablePlaylists is { } known) return known;
+        try
+        {
+            return _editablePlaylists = await _source.GetEditablePlaylistsAsync();
+        }
+        catch (Exception e) when (IsLoadFailure(e))
+        {
+            ShowToast("歌單載入失敗，請稍後再試");
+            return [];
+        }
+    }
+
+    public async Task CreatePlaylistAsync(string name, Song? song)
+    {
+        if (_source is null || !RequireSignIn()) return;
+        name = name.Trim();
+        if (name.Length == 0) return;
+        try
+        {
+            var playlist = await _source.CreatePlaylistAsync(name);
+            _editablePlaylists = null;
+            _libraryCache = null;
+            if (song is null) ShowToast($"已建立歌單「{playlist.Title}」");
+            else await AddToPlaylistAsync(playlist, song, created: true);
+            if (Page == Page.Library) await ShowLibraryAsync();
+        }
+        catch (Exception e) when (IsLoadFailure(e))
+        {
+            ShowToast(e is InvalidOperationException ? e.Message : "建立歌單失敗，請稍後再試");
+        }
+    }
+
+    public async Task AddToPlaylistAsync(Collection playlist, Song song, bool created = false)
+    {
+        if (_source is null || !RequireSignIn()) return;
+        try
+        {
+            await _source.AddToPlaylistAsync(playlist, song);
+            _songCache.Remove($"{playlist.Kind}:{playlist.Id}");
+            _libraryCache = null;
+            ShowToast(created ? $"已建立「{playlist.Title}」並加入這首歌" : $"已加入「{playlist.Title}」");
+        }
+        catch (Exception e) when (IsLoadFailure(e))
+        {
+            ShowToast(e is InvalidOperationException ? e.Message : "加入歌單失敗，請稍後再試");
+        }
+    }
+
     public async Task ToggleLikeAsync(Song song)
     {
         if (_source is null) return;
@@ -1410,6 +1476,7 @@ public sealed class AppModel : Observable, IDisposable
         Songs.Clear();
         _homeCache = null;
         _libraryCache = null;
+        _editablePlaylists = null;
         _feed = null;
         _coverPalette = null;
         _searchCache.Clear();

@@ -74,6 +74,41 @@ public sealed partial class QqMusicSource(Bridge bridge) : IMusicSource
         if (Int(doc.RootElement, "code") != 200) throw new InvalidOperationException("收藏失敗，請稍後再試");
     }
 
+    public async Task<IReadOnlyList<Collection>> GetEditablePlaylistsAsync(CancellationToken ct = default)
+    {
+        var result = new List<Collection>();
+        if (!IsSignedIn) return result;
+        using var doc = await bridge.GetAsync("/user/playlist", ct);
+        if (!doc.RootElement.TryGetProperty("playlist", out var list) || list.ValueKind != JsonValueKind.Array) return result;
+        foreach (var item in list.EnumerateArray())
+        {
+            // Directories from 200 up are QQ Music's own (such as 我喜歡); songs cannot be written to them here.
+            if (Int(item, "dirId", "dirid") is >= 200 || Int(item, "dirType", "dirtype") is > 0) continue;
+            if (ParsePlaylist(item, CollectionKind.Owned) is { } playlist) result.Add(playlist);
+        }
+        return result;
+    }
+
+    public async Task<Collection> CreatePlaylistAsync(string name, CancellationToken ct = default)
+    {
+        if (!IsSignedIn) throw new InvalidOperationException("登入後才能建立歌單");
+        using var doc = await bridge.PostJsonAsync("/user/playlist/create", JsonSerializer.Serialize(new { name }), ct);
+        var root = doc.RootElement;
+        var tid = Str(root, "tid");
+        if (Int(root, "code") != 200 || string.IsNullOrEmpty(tid)) throw new InvalidOperationException("建立歌單失敗，請稍後再試");
+        return new Collection(CollectionKind.Owned, tid, Clean(Str(root, "name") ?? name), "歌單", "");
+    }
+
+    public async Task AddToPlaylistAsync(Collection playlist, Song song, CancellationToken ct = default)
+    {
+        if (!IsSignedIn) throw new InvalidOperationException("登入後才能加入歌單");
+        if (song.Kind != 0) throw new InvalidOperationException("這首歌無法加入歌單");
+        var id = song.NumericId > 0 ? song.NumericId : await ResolveSongIdAsync(song, ct);
+        var body = JsonSerializer.Serialize(new { tid = long.Parse(playlist.Id), op = "add", songs = new[] { new { id, type = 0 } } });
+        using var doc = await bridge.PostJsonAsync("/user/playlist/tracks", body, ct);
+        if (Int(doc.RootElement, "code") != 200) throw new InvalidOperationException("加入歌單失敗，請稍後再試");
+    }
+
     private async Task<long> ResolveSongIdAsync(Song song, CancellationToken ct)
     {
         using var doc = await bridge.GetAsync($"/getSongInfo?songmid={Uri.EscapeDataString(song.Mid)}", ct);

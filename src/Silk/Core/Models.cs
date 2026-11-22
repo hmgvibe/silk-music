@@ -70,6 +70,11 @@ public interface IMusicSource
     Task<IReadOnlyList<Collection>> SearchSingersAsync(string keyword, CancellationToken ct = default);
     /// <summary>Finds albums (<see cref="CollectionKind.Album"/>) or playlists (<see cref="CollectionKind.Playlist"/>).</summary>
     Task<IReadOnlyList<Collection>> SearchCollectionsAsync(string keyword, CollectionKind kind, CancellationToken ct = default);
+    /// <summary>The signed-in user's own playlists that songs can be added to (not system ones such as 我喜歡).</summary>
+    Task<IReadOnlyList<Collection>> GetEditablePlaylistsAsync(CancellationToken ct = default);
+    /// <summary>Creates an empty playlist; QQ Music allows names of up to 20 characters.</summary>
+    Task<Collection> CreatePlaylistAsync(string name, CancellationToken ct = default);
+    Task AddToPlaylistAsync(Collection playlist, Song song, CancellationToken ct = default);
     Task<Detail> GetSingerAsync(string mid, CancellationToken ct = default);
     Task<Detail> GetAlbumAsync(string mid, CancellationToken ct = default);
     Task<string?> GetStreamAsync(Song song, CancellationToken ct = default);

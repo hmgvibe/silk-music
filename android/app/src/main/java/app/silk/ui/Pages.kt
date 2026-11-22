@@ -82,6 +82,7 @@ private fun SongList(vm: AppViewModel, songs: List<Song>, from: CollectionKind?,
                 onPlayNext = { vm.playNext(song) },
                 onAddToQueue = { vm.addToQueue(song) },
                 onLike = { vm.toggleLike(song) },
+                onAddToPlaylist = { vm.pickPlaylist(song) },
                 onSinger = vm::openSinger,
             )
         }
@@ -122,7 +123,9 @@ fun SongsScreen(vm: AppViewModel, collection: Collection) {
 fun LibraryScreen(vm: AppViewModel) {
     val state = vm.library
     Column(Modifier.fillMaxSize()) {
-        PageHeader("音樂庫", onBack = { vm.back() })
+        PageHeader("音樂庫", onBack = { vm.back() }) {
+            Box(Modifier.padding(end = 6.dp)) { Chip("＋ 新建歌單", false) { vm.newPlaylist() } }
+        }
         val grid = rememberLazyGridState()
         LazyVerticalGrid(
             state = grid,
